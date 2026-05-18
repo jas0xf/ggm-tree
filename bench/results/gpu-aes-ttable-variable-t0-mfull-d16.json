@@ -1,0 +1,20 @@
+{
+  "backend": "gpu",
+  "prg": "aes",
+  "kernel": "ttable",
+  "key_mode": "variable",
+  "threads": 0,
+  "depth": 16,
+  "mode": "full",
+  "median_seconds": 0.001695971004664898,
+  "iqr_seconds": 4.713330417871475e-05,
+  "min_seconds": 0.0016678571701049805,
+  "leaves_per_sec": 38642170.0723292,
+  "bytes_per_sec": 618274721.1572672,
+  "repeats": 30,
+  "warmup": 5,
+  "seed_hex": "000102030405060708090a0b0c0d0e0f",
+  "git_sha": "unknown",
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2620 v4 @ 2.10GHz",
+  "gpu_model": "NVIDIA GeForce RTX 3060"
+}

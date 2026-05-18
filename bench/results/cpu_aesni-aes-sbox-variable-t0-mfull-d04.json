@@ -6,15 +6,15 @@
   "threads": 0,
   "depth": 4,
   "mode": "full",
-  "median_seconds": 0.00012658146442845464,
-  "iqr_seconds": 6.853020749986172e-06,
-  "min_seconds": 0.00011828099377453327,
-  "leaves_per_sec": 126400.81288555001,
-  "bytes_per_sec": 2022413.0061688002,
+  "median_seconds": 0.00015299487859010696,
+  "iqr_seconds": 7.388531230390072e-05,
+  "min_seconds": 0.0001165592111647129,
+  "leaves_per_sec": 104578.66398826372,
+  "bytes_per_sec": 1673258.6238122196,
   "repeats": 30,
   "warmup": 5,
   "seed_hex": "000102030405060708090a0b0c0d0e0f",
-  "git_sha": "71afece8ead1fa508c5901ec21621d803121f3bb",
-  "cpu_model": "AMD Ryzen 7 5700U with Radeon Graphics",
-  "gpu_model": "none"
+  "git_sha": "unknown",
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2620 v4 @ 2.10GHz",
+  "gpu_model": "NVIDIA GeForce RTX 3060"
 }
