@@ -1,0 +1,26 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: pip install uv
+      - name: Install deps (no pycuda)
+        run: |
+          uv venv
+          uv pip install numpy matplotlib pytest black ruff
+      - name: Build CPU library
+        run: make -C src/ggm/cpu
+      - name: Lint
+        run: |
+          uv run ruff check src bench tests
+          uv run black --check src bench tests
+      - name: Test
+        run: uv run pytest -m "not gpu"
