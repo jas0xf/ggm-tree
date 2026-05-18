@@ -315,16 +315,15 @@ Both decks built with `frontend-slides:frontend-slides` (HTML/CSS); shared CSS a
 - Each member opens PRs from their own GitHub account so the contribution graph reflects real participation.
 - `CONTRIBUTORS.md` lists each member's primary and secondary areas of ownership.
 
-Suggested split for a four-member group (final split TBD by the user). Smaller groups merge rows; larger groups split AES kernels by variant.
+Three-member group. Topical split for the written deliverables (`CONTRIBUTORS.md`, report acknowledgements). The actual GitHub commit graph reflects whatever author email each commit is made under — if other members make any commits or merge any PRs from their own accounts, even small ones, those will show up in the contribution graph automatically.
 
-| Member | Primary | Secondary |
+| Member | Primary topic | Secondary topic |
 |---|---|---|
-| A | AES kernels (S-box, T-tables) + AES KAT | Benchmark harness |
-| B | Spongent kernel + Spongent KAT | Plots / figures |
-| C | CPU baselines (1T, AES-NI, OpenMP) + integration | Report writing |
-| D | Bitsliced AES + parallelism optimizations | Slides |
+| 1 | AES PRG kernels (S-box / T-tables / bitsliced) + AES KAT | Benchmark harness |
+| 2 | Spongent PRG kernel + Spongent KAT + CPU baselines | Plots / figures |
+| 3 | GPU memory layout, parallelism kernels, CPU OpenMP integration | Report + slides |
 
-Group composition (member count and names) is the one open item in this spec; it will be resolved when the user confirms.
+The report's "Contributions" paragraph (if the IEEE template requires one) lists all three members as equal contributors to the GGM project, with topical responsibilities matching the table above.
 
 ## 13. Risks and Mitigations
 
