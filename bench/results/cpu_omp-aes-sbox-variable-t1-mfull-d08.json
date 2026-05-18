@@ -1,0 +1,20 @@
+{
+  "backend": "cpu_omp",
+  "prg": "aes",
+  "kernel": "sbox",
+  "key_mode": "variable",
+  "threads": 1,
+  "depth": 8,
+  "mode": "full",
+  "median_seconds": 0.00035289599327370524,
+  "iqr_seconds": 1.1477211955934763e-05,
+  "min_seconds": 0.0003084189957007766,
+  "leaves_per_sec": 725426.2017122054,
+  "bytes_per_sec": 11606819.227395287,
+  "repeats": 30,
+  "warmup": 5,
+  "seed_hex": "000102030405060708090a0b0c0d0e0f",
+  "git_sha": "5e65ada569bf4e05e318ce10c6446141fe17a7a2",
+  "cpu_model": "AMD Ryzen 7 5700U with Radeon Graphics",
+  "gpu_model": "none"
+}
