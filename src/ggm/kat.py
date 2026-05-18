@@ -1,4 +1,5 @@
 """Known-answer test vectors for AES-128 and Spongent-π[176]."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 
@@ -22,8 +23,8 @@ AES128_VECTORS = [AES128_FIPS197_C1]
 
 @dataclass(frozen=True)
 class SpongentVector:
-    input: bytes    # 22 bytes (176 bits)
-    output: bytes   # 22 bytes after one π[176] application
+    input: bytes  # 22 bytes (176 bits)
+    output: bytes  # 22 bytes after one π[176] application
 
 
 # Spongent-π[176] KAT scaffold. The literal output is captured empirically by

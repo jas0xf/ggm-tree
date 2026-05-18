@@ -3,6 +3,7 @@
 CPU-only by default; GPU cells are skipped automatically if no CUDA device.
 Filter via --filter to run a subset (e.g. --filter aes-sbox or --filter d08).
 """
+
 from __future__ import annotations
 import argparse
 import sys
@@ -16,6 +17,7 @@ from bench.runner import run_cell, save
 def _gpu_present() -> bool:
     try:
         import pycuda.autoinit  # type: ignore  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -41,12 +43,19 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="GGM benchmark grid driver")
     ap.add_argument("--out", default="bench/results", type=Path)
     ap.add_argument("--filter", default="", help="substring filter on the cell tag")
-    ap.add_argument("--depths", default="4,6,8,10,12,14",
-                    help="comma-separated tree depths (default: 4..14 for fast CPU runs)")
-    ap.add_argument("--threads", default="1,4,8",
-                    help="comma-separated OpenMP thread counts")
-    ap.add_argument("--skip-gpu", action="store_true",
-                    help="never run GPU cells, even if a CUDA device is present")
+    ap.add_argument(
+        "--depths",
+        default="4,6,8,10,12,14",
+        help="comma-separated tree depths (default: 4..14 for fast CPU runs)",
+    )
+    ap.add_argument(
+        "--threads", default="1,4,8", help="comma-separated OpenMP thread counts"
+    )
+    ap.add_argument(
+        "--skip-gpu",
+        action="store_true",
+        help="never run GPU cells, even if a CUDA device is present",
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
 

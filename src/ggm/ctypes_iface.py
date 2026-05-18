@@ -1,4 +1,5 @@
 """ctypes binding to libggmcpu.so."""
+
 from __future__ import annotations
 import ctypes
 from pathlib import Path
@@ -9,7 +10,11 @@ _LIB_PATH = Path(__file__).resolve().parent / "cpu" / "libggmcpu.so"
 _lib = ctypes.CDLL(str(_LIB_PATH))
 
 # ---- AES single-block primitives ----------------------------------------------------
-_lib.ggm_aes128_encrypt_block_ref.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+_lib.ggm_aes128_encrypt_block_ref.argtypes = [
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+]
 _lib.ggm_aes128_encrypt_block_ref.restype = None
 
 
@@ -38,30 +43,46 @@ def _alloc_tree(depth: int) -> tuple[ctypes.Array[ctypes.c_ubyte], int]:
     return (ctypes.c_ubyte * total)(), total
 
 
-_lib.ggm_expand_aes_sbox_1t.argtypes = [ctypes.c_char_p, ctypes.c_uint32, ctypes.c_char_p]
+_lib.ggm_expand_aes_sbox_1t.argtypes = [
+    ctypes.c_char_p,
+    ctypes.c_uint32,
+    ctypes.c_char_p,
+]
 _lib.ggm_expand_aes_sbox_1t.restype = None
 
 
 def expand_aes_sbox_1t(seed: bytes, depth: int) -> np.ndarray:
     assert len(seed) == 16 and 0 <= depth <= 24
     buf, _ = _alloc_tree(depth)
-    _lib.ggm_expand_aes_sbox_1t(seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p))
+    _lib.ggm_expand_aes_sbox_1t(
+        seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p)
+    )
     return np.frombuffer(buf, dtype=np.uint8).reshape(-1, 16).copy()
 
 
-_lib.ggm_expand_spongent_1t.argtypes = [ctypes.c_char_p, ctypes.c_uint32, ctypes.c_char_p]
+_lib.ggm_expand_spongent_1t.argtypes = [
+    ctypes.c_char_p,
+    ctypes.c_uint32,
+    ctypes.c_char_p,
+]
 _lib.ggm_expand_spongent_1t.restype = None
 
 
 def expand_spongent_1t(seed: bytes, depth: int) -> np.ndarray:
     assert len(seed) == 16 and 0 <= depth <= 24
     buf, _ = _alloc_tree(depth)
-    _lib.ggm_expand_spongent_1t(seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p))
+    _lib.ggm_expand_spongent_1t(
+        seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p)
+    )
     return np.frombuffer(buf, dtype=np.uint8).reshape(-1, 16).copy()
 
 
 # ---- AES-NI / OpenMP variants (stubs until Phase 7 lands) ---------------------------
-_lib.ggm_aes128_encrypt_block_ni.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+_lib.ggm_aes128_encrypt_block_ni.argtypes = [
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+]
 _lib.ggm_aes128_encrypt_block_ni.restype = None
 
 
@@ -78,33 +99,49 @@ _lib.ggm_expand_aes_ni_1t.restype = None
 
 def expand_aes_ni_1t(seed: bytes, depth: int) -> np.ndarray:
     buf, _ = _alloc_tree(depth)
-    _lib.ggm_expand_aes_ni_1t(seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p))
+    _lib.ggm_expand_aes_ni_1t(
+        seed, ctypes.c_uint32(depth), ctypes.cast(buf, ctypes.c_char_p)
+    )
     return np.frombuffer(buf, dtype=np.uint8).reshape(-1, 16).copy()
 
 
 _lib.ggm_expand_aes_sbox_omp.argtypes = [
-    ctypes.c_char_p, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_int,
+    ctypes.c_char_p,
+    ctypes.c_uint32,
+    ctypes.c_char_p,
+    ctypes.c_int,
 ]
 _lib.ggm_expand_aes_sbox_omp.restype = None
 
 
 def expand_aes_sbox_omp(seed: bytes, depth: int, threads: int = 0) -> np.ndarray:
     buf, _ = _alloc_tree(depth)
-    _lib.ggm_expand_aes_sbox_omp(seed, ctypes.c_uint32(depth),
-                                 ctypes.cast(buf, ctypes.c_char_p), ctypes.c_int(threads))
+    _lib.ggm_expand_aes_sbox_omp(
+        seed,
+        ctypes.c_uint32(depth),
+        ctypes.cast(buf, ctypes.c_char_p),
+        ctypes.c_int(threads),
+    )
     return np.frombuffer(buf, dtype=np.uint8).reshape(-1, 16).copy()
 
 
 _lib.ggm_expand_spongent_omp.argtypes = [
-    ctypes.c_char_p, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_int,
+    ctypes.c_char_p,
+    ctypes.c_uint32,
+    ctypes.c_char_p,
+    ctypes.c_int,
 ]
 _lib.ggm_expand_spongent_omp.restype = None
 
 
 def expand_spongent_omp(seed: bytes, depth: int, threads: int = 0) -> np.ndarray:
     buf, _ = _alloc_tree(depth)
-    _lib.ggm_expand_spongent_omp(seed, ctypes.c_uint32(depth),
-                                 ctypes.cast(buf, ctypes.c_char_p), ctypes.c_int(threads))
+    _lib.ggm_expand_spongent_omp(
+        seed,
+        ctypes.c_uint32(depth),
+        ctypes.cast(buf, ctypes.c_char_p),
+        ctypes.c_int(threads),
+    )
     return np.frombuffer(buf, dtype=np.uint8).reshape(-1, 16).copy()
 
 

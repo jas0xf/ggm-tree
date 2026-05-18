@@ -1,4 +1,5 @@
 """Measurement runner: warmup + repeats per (backend, prg, kernel, depth) cell."""
+
 from __future__ import annotations
 import json
 import platform
@@ -58,22 +59,25 @@ def _gpu_model() -> str:
     try:
         import pycuda.driver as drv  # type: ignore
         import pycuda.autoinit  # type: ignore  # noqa: F401
+
         return drv.Device(0).name()
     except Exception:
         return "none"
 
 
-def run_cell(*,
-             backend: str,
-             prg: str,
-             depth: int,
-             kernel: str = "sbox",
-             key_mode: str = "variable",
-             mode: str = "full",
-             threads: int = 0,
-             seed: Optional[bytes] = None,
-             warmup: int = 5,
-             repeats: int = 30) -> BenchResult:
+def run_cell(
+    *,
+    backend: str,
+    prg: str,
+    depth: int,
+    kernel: str = "sbox",
+    key_mode: str = "variable",
+    mode: str = "full",
+    threads: int = 0,
+    seed: Optional[bytes] = None,
+    warmup: int = 5,
+    repeats: int = 30,
+) -> BenchResult:
     seed = seed if seed is not None else bytes(range(16))
 
     def expand_once() -> None:

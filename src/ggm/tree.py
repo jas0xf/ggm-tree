@@ -3,6 +3,7 @@
 Importing this module does NOT require CUDA; GPU backends are loaded lazily
 on first GPU call and raise a clear error if PyCUDA / a CUDA device is missing.
 """
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
@@ -10,7 +11,6 @@ from typing import Optional
 import numpy as np
 
 from . import ctypes_iface
-
 
 _CPU_BACKENDS = {"cpu_1t", "cpu_aesni", "cpu_omp"}
 _GPU_BACKENDS = {"gpu"}
@@ -39,14 +39,18 @@ class GGMTree:
         if not (0 <= self.depth <= 24):
             raise ValueError("depth must be in [0, 24]")
         if self.key_mode not in _KEY_MODES:
-            raise ValueError(f"key_mode must be one of {_KEY_MODES}; got {self.key_mode!r}")
+            raise ValueError(
+                f"key_mode must be one of {_KEY_MODES}; got {self.key_mode!r}"
+            )
         self.seed = bytes(self.seed)
 
-    def expand(self,
-               backend: str = "cpu_1t",
-               kernel: str = "sbox",
-               mode: str = "full",
-               threads: int = 0) -> np.ndarray:
+    def expand(
+        self,
+        backend: str = "cpu_1t",
+        kernel: str = "sbox",
+        mode: str = "full",
+        threads: int = 0,
+    ) -> np.ndarray:
         """Materialize the tree using the chosen backend. Returns (N, 16) uint8 ndarray."""
         if backend not in _ALL_BACKENDS:
             raise ValueError(f"backend must be one of {_ALL_BACKENDS}; got {backend!r}")
@@ -78,7 +82,9 @@ class GGMTree:
                 return ctypes_iface.expand_spongent_omp(self.seed, self.depth, threads)
             if backend == "cpu_aesni":
                 raise ValueError("AES-NI does not apply to Spongent")
-        raise ValueError(f"unsupported combination prg={self.prg!r} backend={backend!r}")
+        raise ValueError(
+            f"unsupported combination prg={self.prg!r} backend={backend!r}"
+        )
 
     def _expand_gpu(self, kernel: str, mode: str) -> np.ndarray:
         try:
@@ -116,7 +122,9 @@ class GGMTree:
     def eval(self, path_bits: str) -> bytes:
         """Single-leaf path-eval. Requires expand() first (uses materialized tree)."""
         if self._tree is None:
-            raise RuntimeError("call expand() first; GPU path-eval kernel lands in Phase 8")
+            raise RuntimeError(
+                "call expand() first; GPU path-eval kernel lands in Phase 8"
+            )
         if len(path_bits) != self.depth or set(path_bits) - {"0", "1"}:
             raise ValueError(f"path_bits must be a {self.depth}-char 0/1 string")
         idx = int(path_bits, 2)

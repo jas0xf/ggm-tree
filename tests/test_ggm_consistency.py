@@ -1,4 +1,5 @@
 """Cross-backend equivalence and tree-KAT tests for GGM expansion."""
+
 import pytest
 
 from ggm.ctypes_iface import (
@@ -34,12 +35,12 @@ SEED = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
 @pytest.mark.parametrize("depth", [4, 8, 12])
 def test_aes_ni_matches_sbox(depth):
     sbox = expand_aes_sbox_1t(SEED, depth)
-    ni   = expand_aes_ni_1t(SEED, depth)
+    ni = expand_aes_ni_1t(SEED, depth)
     assert (sbox == ni).all()
 
 
 @pytest.mark.parametrize("depth,threads", [(4, 1), (8, 4), (12, 8)])
 def test_aes_omp_matches_sbox(depth, threads):
     sbox = expand_aes_sbox_1t(SEED, depth)
-    omp  = expand_aes_sbox_omp(SEED, depth, threads)
+    omp = expand_aes_sbox_omp(SEED, depth, threads)
     assert (sbox == omp).all()

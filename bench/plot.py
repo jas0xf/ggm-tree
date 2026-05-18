@@ -1,4 +1,5 @@
 """Render benchmark plots from bench/results/*.json into report/figures/."""
+
 from __future__ import annotations
 import argparse
 import json
@@ -9,14 +10,16 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 mpl.use("Agg")
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.size": 8,
-    "axes.labelsize": 8,
-    "legend.fontsize": 7,
-    "figure.figsize": (3.4, 2.3),
-    "savefig.bbox": "tight",
-})
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "legend.fontsize": 7,
+        "figure.figsize": (3.4, 2.3),
+        "savefig.bbox": "tight",
+    }
+)
 
 
 def load_results(results_dir: Path) -> list[dict]:
@@ -58,8 +61,11 @@ def plot_throughput_vs_depth(data: list[dict], prg: str, outfile: Path) -> None:
 
 
 def plot_speedup_bars(data: list[dict], depth: int, outfile: Path) -> None:
-    bars = [(_label(d), d["leaves_per_sec"]) for d in data
-            if d["prg"] == "aes" and d["depth"] == depth]
+    bars = [
+        (_label(d), d["leaves_per_sec"])
+        for d in data
+        if d["prg"] == "aes" and d["depth"] == depth
+    ]
     if not bars:
         return
     bars.sort(key=lambda x: x[1])
@@ -88,9 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[plot] no results in {args.results}")
         return 0
 
-    plot_throughput_vs_depth(data, "aes",      args.figures / "throughput_aes.pdf")
+    plot_throughput_vs_depth(data, "aes", args.figures / "throughput_aes.pdf")
     plot_throughput_vs_depth(data, "spongent", args.figures / "throughput_spongent.pdf")
-    plot_speedup_bars(data, args.speedup_depth, args.figures / f"speedup_d{args.speedup_depth:02d}.pdf")
+    plot_speedup_bars(
+        data,
+        args.speedup_depth,
+        args.figures / f"speedup_d{args.speedup_depth:02d}.pdf",
+    )
     print(f"[plot] wrote figures to {args.figures}")
     return 0
 
