@@ -6,9 +6,11 @@ from ggm.ctypes_iface import (
     expand_aes_sbox_1t,
     expand_aes_ni_1t,
     expand_aes_sbox_omp,
+    expand_spongent_1t,
+    expand_spongent_omp,
     has_aes_ni,
 )
-from ggm.kat import GGM_AES_DEPTH4_KAT
+from ggm.kat import GGM_AES_DEPTH4_KAT, GGM_SPONGENT_DEPTH4_KAT
 
 
 def test_aes_sbox_1t_depth_4_shape():
@@ -44,6 +46,22 @@ def test_aes_omp_matches_sbox(depth, threads):
     sbox = expand_aes_sbox_1t(SEED, depth)
     omp = expand_aes_sbox_omp(SEED, depth, threads)
     assert (sbox == omp).all()
+
+
+def test_spongent_1t_matches_kat():
+    kat = GGM_SPONGENT_DEPTH4_KAT
+    tree = expand_spongent_1t(kat["seed"], kat["depth"])
+    expected = [bytes.fromhex(h) for h in kat["tree_hex"]]
+    assert len(expected) == tree.shape[0]
+    for i, exp in enumerate(expected):
+        assert bytes(tree[i]) == exp, f"node {i} mismatch"
+
+
+@pytest.mark.parametrize("depth,threads", [(4, 1), (8, 4), (12, 8)])
+def test_spongent_omp_matches_1t(depth, threads):
+    one = expand_spongent_1t(SEED, depth)
+    par = expand_spongent_omp(SEED, depth, threads)
+    assert (one == par).all()
 
 
 # ---- GPU equivalence (requires CUDA device; auto-skipped on CPU-only boxes) ----

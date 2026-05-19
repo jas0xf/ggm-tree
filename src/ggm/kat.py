@@ -27,12 +27,13 @@ class SpongentVector:
     output: bytes  # 22 bytes after one π[176] application
 
 
-# Spongent-π[176] KAT scaffold. The literal output is captured empirically by
-# Phase 2 once spongent_ref.c is implemented, then cross-checked against the
-# Spongent CHES 2011 paper / reference C code.
+# Spongent-π[176] KAT — captured 2026-05-18 from spongent_ref.c (which uses the
+# same constants as the GPU kernel; CPU and GPU produce bit-identical output).
+# Cross-validation against the CHES 2011 paper's published π[176](0) vector is
+# still TODO before final submission.
 SPONGENT_PI176_ZERO = SpongentVector(
     input=bytes(22),
-    output=bytes(22),  # populated in Phase 2 Task 2.3
+    output=bytes.fromhex("4b12cf7b99436d1dd133b61d6bf1a06b7d985c99a986"),
 )
 SPONGENT_VECTORS = [SPONGENT_PI176_ZERO]
 
@@ -78,9 +79,43 @@ GGM_AES_DEPTH4_KAT = {
     ],
 }
 
-# GGM Spongent tree KAT at d=4 (populated in Phase 2 Task 2.4).
+# GGM Spongent tree KAT at d=4 with seed = FIPS-197 C.1 key.
+# Captured 2026-05-18 from expand_spongent_1t (Phase 2). 31 nodes; node 0 is
+# the seed, nodes 15..30 are the leaves. CPU and GPU produce identical output.
 GGM_SPONGENT_DEPTH4_KAT = {
     "seed": bytes.fromhex("000102030405060708090a0b0c0d0e0f"),
     "depth": 4,
-    "tree_hex": [],
+    "tree_hex": [
+        "000102030405060708090a0b0c0d0e0f",
+        "7a3ff26dd940b47cbe2da502096d360c",
+        "c6c6acc6f682612f63283f85fb74e4e0",
+        "d31e9b2603b0b13653a3ab3f727f37d8",
+        "0c0905812b2d8991151ec5751ac5c7a5",
+        "25240104accb2db24713124cf6737e0d",
+        "247f3aa709a8ef3065e100c3ae2e73f7",
+        "d78870b76d137959a6a95a899647fee4",
+        "14c1bacf00ee8e9631554b1876be4695",
+        "67f0da9d4eff7424befc18f42682150c",
+        "913cc34cf1572037daaf98f951239ffb",
+        "37ce0ad2a949475fa2f15a28f7172c8d",
+        "b8b55ea6219e8b578749275c4a55b061",
+        "1378c6a52b96fa90401566f7085b2dc0",
+        "681a1c632abcbeac78c555d34e86a239",
+        "9c3c6bbcc3b80f18bf97c18ae19386ec",
+        "838d8ea3b5667e9260bff3bbd3e80832",
+        "432842d0f3416fed52e0b417868886ff",
+        "8d665dc375e0e5971a123e5ef6561590",
+        "03de8e9090574da647014e1d7ae16797",
+        "097ab02be98fc0e460fdcfaa6b5d7638",
+        "5149b3ebbab90d59254f479b69e59e80",
+        "15823a1cb9d4779f641255dad1612828",
+        "219ee45cf370fa5409976f6b5d0c61d7",
+        "df2389ada0999f3f79ad4fe5f1726b37",
+        "51a73aebdfc6c9d2fb08286deecee363",
+        "5bdea172dac46bc3c4258edb8aa0425c",
+        "adb8cc43d940d5364a98a350597f4f0f",
+        "3810be91f4c4bbaaf339894fd5f4a137",
+        "4e9da41d786f41dee9cac266b2e1e72d",
+        "77cda772a18d9a3cc6ceeba337a4e5f1",
+    ],
 }
