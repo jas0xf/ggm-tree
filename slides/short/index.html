@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GGM Tree on GPU — short deck</title>
+<style>
+  :root { --bg:#0e0f13; --fg:#e8eaf0; --acc:#7aa7ff; --dim:#8a8f9a; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg);
+               font:18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .deck { display:grid; grid-auto-flow:column; height:100vh; scroll-snap-type:x mandatory;
+          overflow-x:auto; overflow-y:hidden; }
+  section { width:100vw; height:100vh; scroll-snap-align:start; padding:6vh 8vw;
+            display:flex; flex-direction:column; justify-content:center; gap:18px; }
+  h1 { font-size:2.6rem; margin:0 0 .3em; letter-spacing:-.01em; }
+  h2 { font-size:1.7rem; margin:0 0 .2em; color:var(--acc); font-weight:600; }
+  p, li { font-size:1.05rem; max-width:64ch; }
+  .lead { font-size:1.2rem; color:var(--dim); }
+  .num { font-variant-numeric:tabular-nums; color:var(--acc); font-weight:700; }
+  ul { padding-left:1.1em; }
+  .figure-row { display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
+  .figure-row img { max-height:56vh; max-width:46vw; border:1px solid #2a2f3a;
+                    border-radius:6px; background:#fff; padding:6px; }
+  .footer { position:fixed; bottom:18px; right:24px; color:var(--dim); font-size:.85rem; }
+  kbd { background:#1a1d24; padding:1px 6px; border-radius:4px; font-size:.85em; }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <section>
+    <h1>GGM Tree on GPU</h1>
+    <p class="lead">AES-128 vs Spongent-π[176] on RTX 3060 — 2.5 minute version</p>
+    <p>UCSD ECE 268 Hardware Security · Spring 2026</p>
+    <p class="lead">Member 1 · Member 2 · Member 3</p>
+  </section>
+
+  <section>
+    <h2>GGM in one diagram</h2>
+    <p>From a length-doubling PRG $G(s) = G_0(s) \,||\, G_1(s)$, walk a binary tree
+       from root $K$:</p>
+    <pre style="font-size:1.05rem">
+                  K
+                /   \
+            G_0(K)   G_1(K)
+            /   \      /   \
+          ...  G_1(G_0(K)) ...
+                       ⋮
+    F_K(x) = leaf reached by bit-string x
+    </pre>
+    <p>We materialize all $2^{d+1}-1$ nodes for $d \in [4, 24]$, then benchmark.</p>
+  </section>
+
+  <section>
+    <h2>AES vs Spongent on GPU</h2>
+    <div class="figure-row">
+      <img src="../../report/figures/aes_vs_spongent.png" alt="AES vs Spongent on GPU">
+      <div>
+        <p>Both are length-doubling PRGs in our GGM construction:</p>
+        <ul>
+          <li>AES-128 = block cipher with CPU silicon support (AES-NI)</li>
+          <li>Spongent-π[176] = lightweight bit-level permutation; <em>no</em> CPU silicon</li>
+        </ul>
+        <p>Despite Spongent's "lightweight" label, on commodity hardware AES wins by
+           <span class="num">~25×</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Headline numbers @ d=20</h2>
+    <div class="figure-row">
+      <img src="../../report/figures/speedup_d20.png" alt="speedup at d=20">
+      <div>
+        <ul>
+          <li>GPU T-tables: <span class="num">~50M</span> leaves/s</li>
+          <li>GPU S-box: <span class="num">~30M</span> leaves/s</li>
+          <li>CPU AES-NI: <span class="num">~8M</span> leaves/s</li>
+          <li>CPU OpenMP t=8: <span class="num">~5M</span> leaves/s</li>
+          <li>CPU 1T: <span class="num">~1.5M</span> leaves/s</li>
+        </ul>
+        <p><strong>GPU T-tables is ~6× faster than CPU AES-NI</strong>,
+           and ~30× over CPU single-thread.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Take-away</h2>
+    <ul>
+      <li>GGM tree expansion maps cleanly to per-level GPU parallelism: at depth $\ell$, launch $2^\ell$ threads, each does one parent → two children.</li>
+      <li>AES kernels: <strong>T-tables ≈ bitsliced &gt; S-box ≈ fixed-key</strong> on RTX 3060.</li>
+      <li>Spongent's hardware-friendly design <em>doesn't</em> translate into GPU throughput. ~25× slower than AES.</li>
+      <li>CPU OpenMP over-subscription (t=16 on 8 cores) is <em>catastrophically</em> slow — a clean parallelism-scaling lesson.</li>
+    </ul>
+    <p class="lead">Code, plots, report: <span class="num">github.com/…/ggm-tree</span></p>
+  </section>
+
+</div>
+<div class="footer">scroll → / arrow keys</div>
+<script>
+  document.addEventListener("keydown", (e) => {
+    const w = window.innerWidth;
+    if (e.key === "ArrowRight" || e.key === " ") document.scrollingElement.scrollBy({left:w, behavior:"smooth"});
+    if (e.key === "ArrowLeft") document.scrollingElement.scrollBy({left:-w, behavior:"smooth"});
+  });
+</script>
+</body>
+</html>

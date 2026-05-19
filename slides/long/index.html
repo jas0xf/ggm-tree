@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GGM Tree on GPU — long deck</title>
+<style>
+  :root { --bg:#0e0f13; --fg:#e8eaf0; --acc:#7aa7ff; --acc2:#ffb56b; --dim:#8a8f9a; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg);
+               font:18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .deck { display:grid; grid-auto-flow:column; height:100vh; scroll-snap-type:x mandatory;
+          overflow-x:auto; overflow-y:hidden; }
+  section { width:100vw; height:100vh; scroll-snap-align:start; padding:6vh 8vw;
+            display:flex; flex-direction:column; justify-content:center; gap:18px; }
+  h1 { font-size:2.6rem; margin:0 0 .3em; letter-spacing:-.01em; }
+  h2 { font-size:1.7rem; margin:0 0 .2em; color:var(--acc); font-weight:600; }
+  h3 { font-size:1.1rem; margin:0; color:var(--acc2); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+  p, li { font-size:1.05rem; max-width:64ch; }
+  .lead { font-size:1.2rem; color:var(--dim); }
+  .num { font-variant-numeric:tabular-nums; color:var(--acc); font-weight:700; }
+  ul { padding-left:1.1em; }
+  pre { background:#1a1d24; padding:14px 18px; border-radius:6px; overflow-x:auto;
+        font-size:0.95rem; }
+  table { border-collapse:collapse; font-size:1rem; }
+  td, th { padding:6px 14px; border-bottom:1px solid #2a2f3a; text-align:left; }
+  th { color:var(--acc); font-weight:600; }
+  .figure-row { display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
+  .figure-row img { max-height:56vh; max-width:46vw; border:1px solid #2a2f3a;
+                    border-radius:6px; background:#fff; padding:6px; }
+  .footer { position:fixed; bottom:18px; right:24px; color:var(--dim); font-size:.85rem; }
+  .badge { display:inline-block; background:#1a1d24; color:var(--acc); padding:3px 10px;
+           border-radius:14px; font-size:.85rem; }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1: Title -->
+  <section>
+    <h1>GGM Tree on GPU</h1>
+    <p class="lead">AES-128 vs Spongent-π[176] on NVIDIA RTX 3060</p>
+    <p>UCSD ECE 268 Hardware Security · Final Project · Spring 2026</p>
+    <p class="lead">Member 1 · Member 2 · Member 3</p>
+  </section>
+
+  <!-- 2: Why GGM -->
+  <section>
+    <h3>Background</h3>
+    <h2>What is a GGM tree?</h2>
+    <p>Goldreich, Goldwasser, Micali (1986): build a PRF from any length-doubling PRG.</p>
+    <pre>
+G : {0,1}^n → {0,1}^{2n},  split as G(s) = (G_0(s), G_1(s))
+
+For input x = x_1 x_2 … x_d :
+  F_K(x) = G_{x_d}( G_{x_{d-1}}( … G_{x_2}( G_{x_1}(K) ) … ) )
+    </pre>
+    <p>Equivalently: walk the binary tree of depth $d$ from root $K$, choosing the
+       $x_i$-th child at level $i$.</p>
+    <p>Full expansion: $2^{d+1} - 1$ nodes × 16 B. At $d{=}24$ that's 512 MB.</p>
+  </section>
+
+  <!-- 3: AES PRG -->
+  <section>
+    <h3>PRG choice 1</h3>
+    <h2>AES-128 as a PRG</h2>
+    <pre>
+Variable-key:   G(s) = AES_s(0) || AES_s(1)
+                (s is reinterpreted as a fresh AES key per node)
+
+Fixed-key:      G(s) = AES_K(s) || AES_K(s ⊕ 0x01)
+                (public K, round keys precomputed once)
+    </pre>
+    <ul>
+      <li>Variable-key: canonical GGM-from-PRF reading; one key schedule per node</li>
+      <li>Fixed-key: faster on GPU; security argument is PRP-based</li>
+      <li>CPU has hardware support: <strong>AES-NI</strong> instructions
+          (<code>_mm_aesenc_si128</code>, <code>_mm_aesenclast_si128</code>)</li>
+    </ul>
+  </section>
+
+  <!-- 4: Spongent PRG -->
+  <section>
+    <h3>PRG choice 2</h3>
+    <h2>Spongent-π[176] as a PRG</h2>
+    <p>Bogdanov et al., CHES 2011 — lightweight hash designed for hardware area.</p>
+    <pre>
+G(s) = π[176](s || 0x00)[0..15]  ||  π[176](s || 0x01)[0..15]
+
+π[176]: 176-bit state, 80 rounds, each round:
+  1. AddCounter   (7-bit LFSR XOR at fixed positions)
+  2. SBoxLayer    (PRESENT 4-bit S-box per nibble)
+  3. pLayer       (j → (j × 44) mod 175)
+    </pre>
+    <p>No CPU hardware support; everything bit-level.</p>
+  </section>
+
+  <!-- 5: Architecture -->
+  <section>
+    <h3>Architecture</h3>
+    <h2>Project layout</h2>
+    <pre>
+ggm-tree/
+├── src/ggm/
+│   ├── tree.py           # GGMTree public API
+│   ├── host.py           # PyCUDA loader + launchers
+│   ├── ctypes_iface.py   # ctypes → libggmcpu.so
+│   ├── kernels/*.cu      # AES + Spongent CUDA
+│   └── cpu/              # C reference + AES-NI + OpenMP
+├── bench/                # measurement + grid driver + plots
+├── tests/                # 35 pytest cells, CPU + GPU
+└── report/, slides/      # IEEE LaTeX + HTML decks
+    </pre>
+  </section>
+
+  <!-- 6: GPU memory layout -->
+  <section>
+    <h3>Implementation</h3>
+    <h2>GPU memory hierarchy</h2>
+    <table>
+      <tr><th>Resource</th><th>Location</th><th>Size</th></tr>
+      <tr><td>AES S-box</td><td>__constant__</td><td>256 B</td></tr>
+      <tr><td>AES T-tables</td><td>__shared__ per block</td><td>4 KB</td></tr>
+      <tr><td>Round keys (var-key)</td><td>registers</td><td>176 B/thread</td></tr>
+      <tr><td>Round keys (fixed-key)</td><td>__constant__</td><td>176 B</td></tr>
+      <tr><td>Spongent state</td><td>registers</td><td>22 B/thread</td></tr>
+      <tr><td>Tree storage</td><td>global</td><td>up to 256 MB</td></tr>
+    </table>
+    <p>BFS layout: parent at index $i$, children at $2i+1, 2i+2$ — naturally coalesced (16 B × 32 threads = 512 B contiguous reads/writes per warp).</p>
+  </section>
+
+  <!-- 7: Parallelism -->
+  <section>
+    <h3>Implementation</h3>
+    <h2>Per-level kernel launch</h2>
+    <pre>
+For ℓ = 0 … d − 1:
+  total_threads = 2^ℓ
+  block         = min(256, 2^ℓ)
+  kernel&lt;&lt;&lt;ceil(2^ℓ / block), block&gt;&gt;&gt;(tree, ℓ)
+
+Each thread:
+  parent = tree[(2^ℓ - 1) + i]
+  (c0, c1) = G(parent)
+  tree[(2^(ℓ+1) - 1) + 2i]     = c0
+  tree[(2^(ℓ+1) - 1) + 2i + 1] = c1
+    </pre>
+    <p>Trivially correct, exposes the "GPU underutilized at small ℓ" story.</p>
+  </section>
+
+  <!-- 8: Verification -->
+  <section>
+    <h3>Verification</h3>
+    <h2>Bit-exact cross-backend</h2>
+    <ul>
+      <li>FIPS-197 Appendix C.1 vector → all AES backends</li>
+      <li>Frozen 31-node GGM-AES tree at $d{=}4$, seed = FIPS-197 key</li>
+      <li>Frozen 31-node GGM-Spongent tree at $d{=}4$</li>
+      <li>Every backend × kernel × thread-count matches byte-for-byte</li>
+    </ul>
+    <p class="lead">All 35 pytest cells pass on the RTX 3060: 13 CPU + 4 Spongent + 18 GPU.</p>
+    <p>Spongent constants are paper-cross-validation TODO (we have internal consistency only).</p>
+  </section>
+
+  <!-- 9: Results — AES throughput -->
+  <section>
+    <h3>Results</h3>
+    <h2>AES throughput vs depth</h2>
+    <div class="figure-row">
+      <img src="../../report/figures/throughput_aes.png" alt="AES throughput">
+      <div>
+        <ul>
+          <li>GPU T-tables overtakes CPU AES-NI around $d{\approx}10$</li>
+          <li>CPU AES-NI cache cliff past $d{=}14$ (tree exceeds L3)</li>
+          <li>CPU OpenMP $t{=}16$ on 8-core box: <em>oversubscribed</em>, throughput collapses</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10: Results — AES vs Spongent -->
+  <section>
+    <h3>Results</h3>
+    <h2>AES vs Spongent on GPU</h2>
+    <div class="figure-row">
+      <img src="../../report/figures/aes_vs_spongent.png" alt="AES vs Spongent">
+      <div>
+        <p>Gap is consistent at <span class="num">~25×</span> across all depths.</p>
+        <p>Spongent's design optimizes for hardware <em>area</em>, not commodity-software throughput. 80 bit-level rounds &gt;&gt; 10 byte-level AES rounds.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11: Trade-offs -->
+  <section>
+    <h3>Discussion</h3>
+    <h2>Trade-offs and side-channels</h2>
+    <ul>
+      <li><strong>S-box vs T-tables</strong>: T-tables 1.5–2× faster; index-dependent
+          shared-memory access introduces a bank-pattern timing channel</li>
+      <li><strong>Bitsliced</strong> (planned, time-boxed): constant-time by construction;
+          32 nodes/warp; not yet shipped — currently falls through to T-tables</li>
+      <li><strong>Fixed-key</strong>: no measurable speedup over var-key (key schedule
+          is already cheap relative to 10 rounds); would matter more for bitsliced</li>
+      <li><strong>Memory mode</strong>: full vs rolling vs leaves-only is planned future work</li>
+    </ul>
+  </section>
+
+  <!-- 12: Conclusion -->
+  <section>
+    <h2>Conclusion</h2>
+    <ul>
+      <li>GGM construction parallelizes naturally onto GPU per-level kernels</li>
+      <li>GPU T-tables: <span class="num">~50M</span> leaves/s @ $d{=}20$ — <span class="num">6×</span> over CPU AES-NI</li>
+      <li>AES &gt;&gt; Spongent on commodity GPU (~25×) — lightweight ≠ fast</li>
+      <li>Code, plots, full report at <span class="num">github.com/…/ggm-tree</span></li>
+    </ul>
+    <h3 style="margin-top:24px">Future work</h3>
+    <ul>
+      <li>Real warp-level bitsliced AES (currently falls through to T-tables)</li>
+      <li>Rolling-buffer and leaves-only memory modes</li>
+      <li>Spongent paper cross-validation</li>
+      <li>Real side-channel timing histograms</li>
+    </ul>
+  </section>
+
+</div>
+<div class="footer">scroll → / arrow keys / space</div>
+<script>
+  document.addEventListener("keydown", (e) => {
+    const w = window.innerWidth;
+    if (e.key === "ArrowRight" || e.key === " ") document.scrollingElement.scrollBy({left:w, behavior:"smooth"});
+    if (e.key === "ArrowLeft") document.scrollingElement.scrollBy({left:-w, behavior:"smooth"});
+  });
+</script>
+</body>
+</html>
