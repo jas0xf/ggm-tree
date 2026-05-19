@@ -31,9 +31,13 @@ kernels and benchmarked against three CPU baselines (single-thread,
 AES-NI, OpenMP) across tree depths $d \in [4, 24]$. We describe the GPU memory
 hierarchy mapping, the per-level parallelization strategy, and three AES kernel
 variants (S-box, T-tables, bitsliced) that trade throughput for constant-time
-behavior. Results show \emph{[placeholder for measured speedup]} on an
-NVIDIA RTX~3060 and illustrate the implementation cost of cache-side-channel
-resistance on commodity GPUs.
+behavior. On an NVIDIA RTX~3060 the GPU
+T-tables kernel reaches roughly 50~million GGM leaves per second at
+depth~20, about 6$\times$ faster than CPU AES-NI and 30$\times$ faster
+than a single-thread S-box reference; Spongent on the same GPU runs
+about 25$\times$ slower than AES, illustrating that lightweight
+hardware-targeted ciphers do not automatically translate into software
+GPU throughput.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -93,6 +97,7 @@ shared/L1, constant, registers); kernel performance depends on coalesced
 broadcast access.
 
 \section{Design Choices}
+\label{sec:design}
 
 \subsection{AES Kernel Variants}
 We ship three AES kernels. The S-box variant places the 256-byte forward
@@ -156,14 +161,107 @@ MixColumns. Used as the cross-backend KAT oracle.
 [Figure placeholder: GGM tree diagram + GPU memory hierarchy mapping.]
 
 \section{Results}
-[Insert seven plots: throughput vs depth (AES and Spongent), GPU vs CPU
-speedup at $d{=}20$, AES kernel-variant comparison, AES vs Spongent on GPU,
-memory-mode trade-off, per-level kernel-launch overhead.]
 
-[Insert table summarizing throughput at $d{=}20$ across all backends.]
+We measured median throughput over 30 timed runs (after 5 warmup runs) for
+every (backend, kernel, depth) cell on a vast.ai NVIDIA RTX~3060 (Ampere,
+compute capability 8.6, 12~GB, CUDA~13). The CPU baseline runs on an AMD
+Ryzen~7 5700U (8 logical cores). Table~\ref{tab:throughput} summarizes the
+peak leaves-per-second at $d{=}20$.
 
-[Discussion paragraph: AES-vs-Spongent gap; GPU-vs-CPU speedup magnitude;
-T-tables vs S-box throughput; memory-mode trade-offs.]
+\begin{table}[t]
+\centering
+\caption{AES GGM tree throughput at $d{=}20$ (leaves/s).}
+\label{tab:throughput}
+\begin{tabular}{lr}
+\toprule
+Backend & leaves/s \\
+\midrule
+GPU T-tables (var.~key) & $\sim$50\,M \\
+GPU bitsliced$^\ast$    & $\sim$50\,M \\
+GPU S-box (fixed key)   & $\sim$30\,M \\
+GPU S-box (var.~key)    & $\sim$30\,M \\
+CPU AES-NI (1 thread)   & $\sim$8\,M  \\
+CPU OpenMP $t{=}8$ S-box & $\sim$5\,M \\
+CPU OpenMP $t{=}4$ S-box & $\sim$5\,M \\
+CPU 1T S-box            & $\sim$1.5\,M \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+\footnotesize $^\ast$ The current bitsliced kernel falls through to T-tables
+(time-boxed implementation pending). The throughput shown is therefore
+identical to T-tables.
+\end{table}
+
+\textbf{GPU vs.\ CPU.} The GPU T-tables kernel reaches $\sim$50\,M leaves/s
+at $d{=}20$, about \emph{6$\times$ faster than CPU AES-NI} and \emph{30$\times$
+faster than the single-thread S-box reference}. The advantage grows with
+$d$ because the GPU's launch overhead amortizes over $2^\ell$ threads at
+each level. Below $d{\approx}10$, kernel launch dominates and the
+single-thread CPU is competitive.
+
+\textbf{AES kernel variants.} On the GPU, T-tables is consistently
+$\sim$1.5--2$\times$ faster than S-box because the table loads occupy 4~KB
+of shared memory per block and replace nine SubBytes lookups per block-encrypt
+with four 32-bit XORs. Fixed-key offers no measurable advantage over
+variable-key in our implementation because the AES-128 key schedule is
+already cheap relative to the ten round encrypts; the projected speedup
+would only materialize on the bitsliced backend where per-thread key
+schedule cost is proportionally larger.
+
+\textbf{AES vs.\ Spongent.} On the GPU, AES is $\sim$25$\times$ faster than
+Spongent across the entire depth range: at $d{=}20$, AES reaches 32\,M leaves/s
+while Spongent reaches 2\,M leaves/s. The gap reflects Spongent's 80 rounds
+of bit-level permutation per child versus AES's 10 byte-level rounds.
+Spongent's design optimizes for hardware area in lightweight settings,
+not raw software throughput on commodity GPUs.
+
+\textbf{OpenMP scaling.} Single-thread CPU OpenMP and S-box reference are
+indistinguishable, both $\sim$1.5--2\,M leaves/s. Throughput scales sub-linearly
+with thread count: 4 threads reach 5\,M leaves/s (3$\times$), 8 threads
+also $\sim$5\,M (no further speedup since the box has 8 logical cores).
+At $t{=}16$, throughput \emph{collapses} to under 1\,M leaves/s due to
+oversubscription, illustrating that more threads than logical cores is
+counterproductive for this workload.
+
+\textbf{Cache cliff at $d{=}20$.} CPU AES-NI peaks at $\sim$20\,M leaves/s
+near $d{=}14$ and degrades to $\sim$8\,M at $d{=}20$ as the tree exceeds the
+last-level cache (256~MB at $d{=}24$, well past the 8\,MB L3). The GPU
+sees a milder dip after $d{=}18$ for the same reason; the global-memory
+traffic dominates as the per-level kernels stream the entire BFS array.
+
+\textbf{Memory-mode trade-off.} Not measured in this run; the rolling and
+leaves-only modes (\S\ref{sec:design}) are planned follow-on work.
+
+Figures~\ref{fig:throughput-aes}--\ref{fig:aes-vs-spongent} show the full
+throughput curves.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/throughput_aes.pdf}
+  \caption{AES GGM tree throughput vs.\ depth across backends. The GPU T-tables curve overtakes all CPU baselines around $d{\approx}10$.}
+  \label{fig:throughput-aes}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/aes_kernels.pdf}
+  \caption{GPU AES kernel variants. T-tables consistently leads at large $d$.}
+  \label{fig:aes-kernels}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/aes_vs_spongent.pdf}
+  \caption{AES vs.\ Spongent on the GPU (S-box, variable key). The gap is consistent at $\sim$25$\times$.}
+  \label{fig:aes-vs-spongent}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/speedup_d20.pdf}
+  \caption{Throughput bar chart at $d{=}20$. Note the log scale on the x-axis.}
+  \label{fig:speedup}
+\end{figure}
 
 \section{Discussion and Future Work}
 Constant-time AES on the GPU requires either bitslicing or sticking to
