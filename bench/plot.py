@@ -116,7 +116,9 @@ def plot_aes_vs_spongent_gpu(data, outfile: Path) -> None:
     for d in data:
         if d["backend"] != "gpu":
             continue
-        if d["prg"] == "aes" and (d["kernel"] != "sbox" or d.get("key_mode") == "fixed"):
+        if d["prg"] == "aes" and (
+            d["kernel"] != "sbox" or d.get("key_mode") == "fixed"
+        ):
             continue
         series[d["prg"].upper()].append((d["depth"], d["leaves_per_sec"]))
     if not series:

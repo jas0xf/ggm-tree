@@ -30,7 +30,9 @@ def _cells_cpu(depths: list[int], omp_threads: list[int]) -> Iterable[dict]:
         yield dict(backend="cpu_1t", prg="spongent", kernel="sbox", depth=d)
         for t in omp_threads:
             yield dict(backend="cpu_omp", prg="aes", kernel="sbox", depth=d, threads=t)
-            yield dict(backend="cpu_omp", prg="spongent", kernel="sbox", depth=d, threads=t)
+            yield dict(
+                backend="cpu_omp", prg="spongent", kernel="sbox", depth=d, threads=t
+            )
 
 
 def _cells_gpu(depths: list[int]) -> Iterable[dict]:

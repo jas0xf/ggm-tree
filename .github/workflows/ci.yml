@@ -21,6 +21,6 @@ jobs:
       - name: Lint
         run: |
           uv run ruff check src bench tests
-          uv run black --check src bench tests
+          uv run black --check --target-version py311 src bench tests
       - name: Test
         run: uv run pytest -m "not gpu"
