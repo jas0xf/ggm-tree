@@ -3,235 +3,2879 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GGM Tree on GPU — long deck</title>
+<title>GGM Tree on GPU · long deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Funnel+Display:wght@300..800&family=JetBrains+Mono:wght@300..700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0e0f13; --fg:#e8eaf0; --acc:#7aa7ff; --acc2:#ffb56b; --dim:#8a8f9a; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg);
-               font:18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .deck { display:grid; grid-auto-flow:column; height:100vh; scroll-snap-type:x mandatory;
-          overflow-x:auto; overflow-y:hidden; }
-  section { width:100vw; height:100vh; scroll-snap-align:start; padding:6vh 8vw;
-            display:flex; flex-direction:column; justify-content:center; gap:18px; }
-  h1 { font-size:2.6rem; margin:0 0 .3em; letter-spacing:-.01em; }
-  h2 { font-size:1.7rem; margin:0 0 .2em; color:var(--acc); font-weight:600; }
-  h3 { font-size:1.1rem; margin:0; color:var(--acc2); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
-  p, li { font-size:1.05rem; max-width:64ch; }
-  .lead { font-size:1.2rem; color:var(--dim); }
-  .num { font-variant-numeric:tabular-nums; color:var(--acc); font-weight:700; }
-  ul { padding-left:1.1em; }
-  pre { background:#1a1d24; padding:14px 18px; border-radius:6px; overflow-x:auto;
-        font-size:0.95rem; }
-  table { border-collapse:collapse; font-size:1rem; }
-  td, th { padding:6px 14px; border-bottom:1px solid #2a2f3a; text-align:left; }
-  th { color:var(--acc); font-weight:600; }
-  .figure-row { display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
-  .figure-row img { max-height:56vh; max-width:46vw; border:1px solid #2a2f3a;
-                    border-radius:6px; background:#fff; padding:6px; }
-  .footer { position:fixed; bottom:18px; right:24px; color:var(--dim); font-size:.85rem; }
-  .badge { display:inline-block; background:#1a1d24; color:var(--acc); padding:3px 10px;
-           border-radius:14px; font-size:.85rem; }
+:root {
+  --bg:       #0b0a08;
+  --bg-soft:  #15120e;
+  --bg-card:  #1c1812;
+  --ink:      #f0e9d8;
+  --ink-dim:  #a39c8c;
+  --ink-mute: #6b6557;
+  --rule:     #2a2620;
+  --ember:    #ff6b35;
+  --ember-dim:#a64823;
+  --lime:     #c8ee3c;
+  --lime-dim: #8da128;
+  --violet:   #b893ff;
+  --display:  "Fraunces", "Times New Roman", serif;
+  --sans:     "Funnel Display", ui-sans-serif, system-ui, sans-serif;
+  --mono:     "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  overflow: hidden;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  opacity: .07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.55'/></svg>");
+  mix-blend-mode: overlay;
+}
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(255,107,53,0.06), transparent 60%),
+    repeating-linear-gradient(to bottom, transparent 0 calc(8.333vh - 1px), rgba(240,233,216,0.025) calc(8.333vh - 1px) 8.333vh);
+}
+.deck {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100vw;
+  height: 100vh;
+  scroll-snap-type: x mandatory;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-behavior: smooth;
+  position: relative; z-index: 1;
+}
+.deck::-webkit-scrollbar { display: none; }
+.deck { scrollbar-width: none; }
+section.slide {
+  width: 100vw; height: 100vh;
+  scroll-snap-align: start;
+  padding: clamp(28px, 4.6vh, 56px) clamp(40px, 5.6vw, 110px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: clamp(10px, 1.5vh, 22px);
+  position: relative; overflow: hidden;
+}
+.head, .foot {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: .16em; color: var(--ink-dim);
+  text-transform: uppercase;
+}
+.head .dot { color: var(--ember); margin-right: 8px; }
+.head .nav .now { color: var(--ink); font-variant-numeric: tabular-nums; }
+.foot .sig::before { content: "—"; color: var(--ember); margin-right: 8px; }
+.eyebrow {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: .25em; color: var(--ember);
+  text-transform: uppercase;
+  display: inline-flex; align-items: baseline; gap: 12px;
+}
+.eyebrow .ix {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-size: 28px; font-weight: 320; color: var(--ember); line-height: 1;
+}
+.headline {
+  font-family: var(--display); font-weight: 280;
+  font-variation-settings: "opsz" 144, "SOFT" 35;
+  letter-spacing: -.035em; line-height: .92;
+}
+.headline em {
+  font-style: italic; color: var(--ember);
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+}
+.caption {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  color: var(--ink-dim);
+  font-size: clamp(13px, 1.5vh, 17px);
+  line-height: 1.4;
+}
+.caption b {
+  font-style: normal; font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+  color: var(--ink);
+}
+.mono { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-dim); text-transform: uppercase; }
+
+/* =============== TITLE =============== */
+.slide-title .body { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 4vw; position: relative; }
+.slide-title h1 {
+  grid-column: 1 / 3;
+  font-family: var(--display); font-weight: 200;
+  font-variation-settings: "opsz" 144, "SOFT" 20;
+  font-size: clamp(64px, 15vw, 220px);
+  letter-spacing: -.045em; line-height: .86;
+  position: relative; z-index: 2;
+}
+.slide-title h1 .ggm { font-style: italic; color: var(--ember); font-variation-settings: "opsz" 144, "SOFT" 100; }
+.slide-title h1 .sub {
+  display: block; font-size: .15em;
+  font-family: var(--mono); font-weight: 400;
+  letter-spacing: .2em; color: var(--ink-dim);
+  margin-top: 1em; text-transform: uppercase;
+  font-variation-settings: normal;
+}
+.slide-title .meta {
+  grid-column: 1 / 2;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px 32px; align-self: end; max-width: 36vw;
+}
+.slide-title .meta .row {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.slide-title .meta .row .label { color: var(--ink-mute); display: block; margin-bottom: 4px; }
+.slide-title .meta .row .val { color: var(--ink); }
+.slide-title .meta .row .val em {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 1.4em; color: var(--ember); letter-spacing: -.01em;
+}
+.slide-title .deco-tree {
+  position: absolute; right: -8vw; top: 2vh;
+  width: 60vw; height: 80vh; opacity: .09; pointer-events: none;
+}
+.slide-title .deco-tree path, .slide-title .deco-tree line { stroke: var(--ink); stroke-width: 1; fill: none; }
+.slide-title .deco-tree circle { fill: var(--ember); }
+
+/* =============== MOTIVATION =============== */
+.slide-motiv .body {
+  display: grid; grid-template-columns: 4fr 5fr;
+  grid-template-rows: auto 1fr;
+  gap: 2vh 3vw;
+}
+.slide-motiv .body > .headline { grid-column: 1 / -1; font-size: clamp(34px, 5.4vw, 70px); max-width: 22ch; }
+.slide-motiv .left {
+  display: flex; flex-direction: column; gap: clamp(12px, 1.8vh, 22px);
+  justify-content: center;
+}
+.slide-motiv .left .lead {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(17px, 2.1vh, 22px);
+  line-height: 1.5; color: var(--ink-dim); max-width: 38ch;
+}
+.slide-motiv .left .lead b { font-style: normal; font-weight: 500; color: var(--ink); }
+.slide-motiv .uses {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-top: 4px;
+}
+.slide-motiv .use-card {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  border-left: 2px solid var(--ember);
+  padding: 14px 16px;
+}
+.slide-motiv .use-card .label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .22em;
+  color: var(--ember); text-transform: uppercase;
+}
+.slide-motiv .use-card .where {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 14px; color: var(--ink); margin-top: 4px;
+}
+.slide-motiv .right {
+  display: flex; flex-direction: column; gap: 18px; justify-content: center;
+}
+.slide-motiv .puzzle {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: clamp(18px, 2.2vh, 26px);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.slide-motiv .puzzle .q {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-size: clamp(22px, 3vh, 32px);
+  line-height: 1.2; color: var(--ink); letter-spacing: -.02em;
+}
+.slide-motiv .puzzle .q em { font-style: normal; color: var(--ember); font-variation-settings: "opsz" 96, "SOFT" 30; font-weight: 500; }
+.slide-motiv .puzzle .a {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 96, "SOFT" 40;
+  font-size: clamp(28px, 4vh, 44px);
+  letter-spacing: -.035em; line-height: 1; color: var(--lime);
+}
+.slide-motiv .puzzle .a em { font-style: italic; font-variation-settings: "opsz" 96, "SOFT" 100; color: var(--lime); }
+.slide-motiv .puzzle .note {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+  border-top: 1px dashed var(--rule); padding-top: 8px;
+}
+
+/* =============== TREE (shared with short) =============== */
+.slide-tree .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-tree .top { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+.slide-tree .top .headline { font-size: clamp(34px, 5.5vw, 72px); flex: 1; }
+.slide-tree .replay {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .2em;
+  text-transform: uppercase; background: transparent; color: var(--ink-dim);
+  border: 1px solid var(--rule); padding: 10px 16px; cursor: pointer;
+  transition: all .15s ease;
+}
+.slide-tree .replay:hover, .slide-tree .replay:focus-visible {
+  color: var(--ember); border-color: var(--ember); outline: none;
+}
+.slide-tree .stage { position: relative; background: var(--bg-soft); border: 1px solid var(--rule); overflow: hidden; }
+.slide-tree .stage svg { display: block; width: 100%; height: 100%; }
+.slide-tree .tag-tl, .slide-tree .tag-br {
+  position: absolute; font-family: var(--mono); font-size: 10px;
+  letter-spacing: .2em; color: var(--ink-dim); text-transform: uppercase;
+}
+.slide-tree .tag-tl { top: 14px; left: 18px; }
+.slide-tree .tag-br { bottom: 14px; right: 18px; text-align: right; }
+.slide-tree .tag-tl .v {
+  display: block;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; color: var(--ember);
+  font-size: 50px; line-height: .9; letter-spacing: -.02em; margin-top: 2px;
+}
+.slide-tree .tag-br .v {
+  display: block;
+  font-family: var(--display);
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-weight: 300; color: var(--lime);
+  font-size: 44px; line-height: .9; letter-spacing: -.02em; margin-top: 2px;
+}
+.slide-tree .legend {
+  display: flex; gap: 28px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+.slide-tree .legend .item { display: flex; align-items: center; gap: 8px; }
+.slide-tree .legend .item .sw {
+  display: inline-block; width: 14px; height: 2px; background: var(--ink-dim);
+}
+.slide-tree .legend .item.path .sw { background: var(--ember); }
+.slide-tree .legend .item.node .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); }
+.slide-tree .legend .item .it {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 12px; color: var(--ink); text-transform: none; letter-spacing: -.005em;
+}
+.tree-edge    { stroke: var(--ink-mute); stroke-width: 1.5; fill: none; opacity: 0; }
+.tree-edge-hi { stroke: var(--ember); stroke-width: 2.5; fill: none; opacity: 0; }
+.tree-node    { fill: var(--bg-card); stroke: var(--ink-dim); stroke-width: 1.25; opacity: 0; }
+.tree-node-hi { fill: var(--ember); stroke: var(--ember); opacity: 0; }
+.tree-leaf    { fill: var(--lime); stroke: var(--lime-dim); opacity: 0; }
+@keyframes treeIn   { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes treeEdge { from { opacity: 0; stroke-dasharray: 0 200; } to { opacity: 1; stroke-dasharray: 200 0; } }
+.tree-anim .tree-edge, .tree-anim .tree-edge-hi { animation: treeEdge .35s cubic-bezier(.4,0,.2,1) both; }
+.tree-anim .tree-node, .tree-anim .tree-node-hi, .tree-anim .tree-leaf { animation: treeIn .35s cubic-bezier(.4,0,.2,1) both; transform-origin: center; transform-box: fill-box; }
+
+/* =============== TASK =============== */
+.slide-task .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-task .body > .headline { font-size: clamp(34px, 5.4vw, 70px); max-width: 22ch; }
+.slide-task .reqs {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-task .req {
+  background: var(--bg);
+  padding: clamp(18px, 2.6vh, 30px);
+  display: flex; flex-direction: column; gap: 14px;
+  position: relative;
+}
+.slide-task .req .ix {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; color: var(--ember);
+  font-size: 44px; line-height: 1; letter-spacing: -.02em;
+}
+.slide-task .req .what {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.1; letter-spacing: -.025em;
+}
+.slide-task .req .what em {
+  font-style: italic; color: var(--ember);
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+}
+.slide-task .req .body-txt {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(13px, 1.5vw, 16px);
+  line-height: 1.4; color: var(--ink-dim); letter-spacing: -.005em;
+}
+.slide-task .req .body-txt b {
+  font-style: normal; color: var(--ink); font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+}
+.slide-task .req .check {
+  margin-top: auto;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--lime); text-transform: uppercase;
+  padding-top: 8px; border-top: 1px dashed var(--rule);
+}
+.slide-task .req .check::before { content: "✓ "; }
+.slide-task .footnote {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .15em;
+  color: var(--ink-mute); text-transform: uppercase; padding-top: 4px;
+}
+
+/* =============== PRIMITIVE DEEP DIVE (shared) =============== */
+.prim-deep .body {
+  display: grid; grid-template-columns: 5fr 4fr;
+  grid-template-rows: auto 1fr;
+  gap: 2vh 3vw;
+}
+.prim-deep .body > .headline {
+  grid-column: 1 / -1;
+  font-size: clamp(34px, 5.2vw, 68px);
+}
+.prim-deep .stage {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: clamp(20px, 2.6vh, 30px);
+  display: flex; flex-direction: column; gap: clamp(12px, 1.6vh, 22px);
+  position: relative; overflow: hidden;
+}
+.prim-deep .stage::before {
+  content: ""; position: absolute; top: 0; left: 0;
+  width: 80px; height: 2px; background: var(--accent);
+}
+.prim-deep.aes { --accent: var(--ember); }
+.prim-deep.spongent { --accent: var(--lime); }
+.prim-deep .stage .meta {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.prim-deep .stage .meta .phase {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 22px; color: var(--accent);
+  text-transform: none; letter-spacing: -.015em;
+}
+.prim-deep .stage .meta .round {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; color: var(--accent);
+  font-size: 36px; line-height: .9; letter-spacing: -.02em;
+  text-transform: none;
+}
+.prim-deep .grid-wrap {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.aes-state {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 6px; aspect-ratio: 1; width: 100%; max-width: 320px;
+}
+.aes-state .cell {
+  background: var(--bg-card); border: 1px solid var(--rule);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: clamp(11px, 1.4vw, 16px);
+  color: var(--ink-dim); font-weight: 500; letter-spacing: .04em;
+  transition: background .25s ease, color .25s ease, transform .25s ease, border-color .25s ease;
+}
+.aes-state .cell.hot {
+  background: var(--ember); color: var(--bg); border-color: var(--ember);
+  box-shadow: 0 0 8px rgba(255,107,53,0.6);
+}
+.aes-state .cell.warm {
+  background: rgba(255,107,53,0.16); border-color: var(--ember); color: var(--ink);
+}
+.sp-state {
+  display: grid; grid-template-columns: repeat(22, 1fr); grid-template-rows: repeat(8, 1fr);
+  gap: 2px; aspect-ratio: 3; width: 100%;
+}
+.sp-state .bit {
+  background: var(--bg);
+  border: 1px solid rgba(67,60,50,.55);
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.sp-state .bit.on  { background: rgba(200,238,60,0.65); border-color: var(--lime-dim); }
+.sp-state .bit.hot { background: var(--lime); border-color: var(--lime); box-shadow: 0 0 4px rgba(200,238,60,0.7); }
+.sp-state .bit.edge { background: rgba(255,107,53,0.55); border-color: var(--ember-dim); }
+
+.prim-deep .right {
+  display: flex; flex-direction: column; gap: clamp(12px, 1.8vh, 22px);
+  justify-content: center;
+}
+.prim-deep .pitch {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(16px, 1.9vh, 21px);
+  line-height: 1.4; color: var(--ink-dim);
+}
+.prim-deep .pitch b {
+  font-style: normal; font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+  color: var(--ink);
+}
+.prim-deep .ops {
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 16px 18px;
+}
+.prim-deep .ops .op {
+  display: grid; grid-template-columns: 28px 1fr;
+  gap: 14px; align-items: baseline;
+}
+.prim-deep .ops .op .n {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  color: var(--accent); font-size: 18px;
+  line-height: 1; letter-spacing: -.015em;
+}
+.prim-deep .ops .op .desc {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(14px, 1.5vw, 17px);
+  color: var(--ink); letter-spacing: -.01em;
+}
+.prim-deep .ops .op .desc b {
+  font-style: normal; color: var(--accent); font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+}
+.prim-deep .ops .op .desc .mono-tag {
+  display: inline-block;
+  font-family: var(--mono); font-size: 10px; font-style: normal;
+  letter-spacing: .1em; color: var(--ink-mute);
+  margin-left: 6px; text-transform: uppercase;
+}
+.prim-deep .stats-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding-top: 10px; border-top: 1px solid var(--rule);
+}
+.prim-deep .stats-row .stat .l {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.prim-deep .stats-row .stat .v {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(22px, 2.6vw, 32px);
+  color: var(--accent); line-height: 1; letter-spacing: -.025em;
+}
+
+/* =============== AES KERNEL VARIANTS =============== */
+.slide-kvar .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-kvar .body > .headline { font-size: clamp(34px, 5.4vw, 70px); }
+.slide-kvar .grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-kvar .cell {
+  background: var(--bg);
+  padding: clamp(16px, 2.2vh, 26px) clamp(16px, 1.8vw, 24px);
+  display: flex; flex-direction: column; gap: clamp(10px, 1.4vh, 16px);
+}
+.slide-kvar .cell .tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--ember);
+}
+.slide-kvar .cell .name {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: clamp(22px, 2.4vw, 32px);
+  letter-spacing: -.025em; line-height: 1.05;
+}
+.slide-kvar .cell .name em { font-style: italic; color: var(--ember); font-variation-settings: "opsz" 96, "SOFT" 100; }
+.slide-kvar .cell .where {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-kvar .cell .where b { color: var(--ink); font-weight: 500; }
+.slide-kvar .cell .pitch {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(13px, 1.5vw, 16px);
+  line-height: 1.4; color: var(--ink-dim); letter-spacing: -.005em;
+}
+.slide-kvar .cell .pitch b {
+  font-style: normal; color: var(--ink); font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+}
+.slide-kvar .cell .perf {
+  margin-top: auto;
+  display: grid; grid-template-columns: 1fr auto; gap: 10px;
+  padding-top: 10px; border-top: 1px dashed var(--rule);
+  align-items: baseline;
+}
+.slide-kvar .cell .perf .l {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-kvar .cell .perf .v {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(24px, 2.4vw, 32px);
+  letter-spacing: -.025em; color: var(--lime); line-height: 1;
+}
+.slide-kvar .cell .sec {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--ember-dim); text-transform: uppercase;
+}
+.slide-kvar .cell.constant .sec { color: var(--lime); }
+.slide-kvar .footnote {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(14px, 1.6vh, 18px);
+  color: var(--ink-dim); text-align: center;
+  border-top: 1px solid var(--rule); padding-top: 10px;
+}
+.slide-kvar .footnote b { font-style: normal; color: var(--lime); font-weight: 500; font-variation-settings: "opsz" 60, "SOFT" 30; }
+
+/* =============== COMPARISON =============== */
+.slide-cmp .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-cmp .body > .headline { font-size: clamp(34px, 5.4vw, 70px); }
+.slide-cmp .compare {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-cmp .col {
+  background: var(--bg);
+  padding: clamp(16px, 2vh, 24px) clamp(20px, 2vw, 28px);
+  display: flex; flex-direction: column;
+}
+.slide-cmp .col.l { --accent: var(--ember); border-top: 2px solid var(--accent); }
+.slide-cmp .col.r { --accent: var(--lime); border-top: 2px solid var(--accent); }
+.slide-cmp .col .name {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 320; font-size: clamp(28px, 3.4vw, 44px);
+  letter-spacing: -.03em; line-height: 1; color: var(--accent);
+}
+.slide-cmp .col .sub {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--ink-mute); text-transform: uppercase;
+  margin-top: 4px;
+}
+.slide-cmp .col dl {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 8px 16px; margin-top: 18px;
+  padding-top: 14px; border-top: 1px dashed var(--rule);
+}
+.slide-cmp .col dt {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+  align-self: baseline;
+}
+.slide-cmp .col dd {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(14px, 1.5vw, 17px);
+  color: var(--ink); letter-spacing: -.01em;
+}
+.slide-cmp .col dd b {
+  font-style: normal; color: var(--accent); font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+}
+.slide-cmp .col .verdict {
+  margin-top: auto;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(18px, 2vw, 24px);
+  color: var(--accent); line-height: 1.15;
+  letter-spacing: -.015em;
+  padding-top: 14px; border-top: 1px solid var(--rule);
+}
+.slide-cmp .vs {
+  background: var(--bg); padding: 30px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px;
+}
+.slide-cmp .vs .label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .25em;
+  color: var(--ink-mute); text-transform: uppercase;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+}
+.slide-cmp .vs .x {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 320; color: var(--ink-dim);
+  font-size: 64px; line-height: .8; letter-spacing: -.04em;
+}
+.slide-cmp .gap-line {
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(14px, 1.6vh, 18px);
+  color: var(--ink-dim);
+}
+.slide-cmp .gap-line .big {
+  font-family: var(--display); font-style: normal;
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  font-weight: 320; color: var(--lime);
+  font-size: clamp(36px, 4.5vw, 56px);
+  letter-spacing: -.04em; line-height: 1;
+}
+
+/* =============== ARCHITECTURE STACK =============== */
+.slide-arch .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-arch .body > .headline { font-size: clamp(34px, 5.4vw, 68px); }
+.slide-arch .stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 14px 22px;
+}
+.slide-arch .col-head {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--accent); text-transform: uppercase;
+  padding-bottom: 8px; border-bottom: 1px solid var(--rule);
+}
+.slide-arch .col.cpu .col-head { --accent: var(--ember); color: var(--accent); }
+.slide-arch .col.gpu .col-head { --accent: var(--lime); color: var(--accent); }
+.slide-arch .layer {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 14px 16px;
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 6px 14px;
+  position: relative;
+  align-items: baseline;
+}
+.slide-arch .layer .name {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(16px, 2vw, 22px);
+  color: var(--ink); letter-spacing: -.015em; line-height: 1;
+}
+.slide-arch .layer .name b {
+  font-style: normal; color: var(--accent); font-weight: 500;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+}
+.slide-arch .col.cpu .layer .name b { color: var(--ember); }
+.slide-arch .col.gpu .layer .name b { color: var(--lime); }
+.slide-arch .layer .tag {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .18em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-arch .layer .files {
+  grid-column: 1 / -1;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-dim); letter-spacing: .05em;
+  padding-top: 6px; border-top: 1px dashed var(--rule);
+  word-break: break-word;
+}
+.slide-arch .flow-arrow {
+  grid-column: 1 / -1;
+  position: relative;
+  text-align: center;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .22em;
+  color: var(--ink-mute); text-transform: uppercase;
+  padding: 4px 0;
+}
+
+/* =============== CPU BASELINES =============== */
+.slide-cpu .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-cpu .body > .headline { font-size: clamp(34px, 5.4vw, 70px); }
+.slide-cpu .cards {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-cpu .card {
+  background: var(--bg);
+  padding: clamp(16px, 2.4vh, 28px) clamp(16px, 1.8vw, 24px);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.slide-cpu .card .tag {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .22em;
+  color: var(--ember); text-transform: uppercase;
+}
+.slide-cpu .card .name {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: clamp(22px, 2.4vw, 32px);
+  letter-spacing: -.025em; line-height: 1;
+}
+.slide-cpu .card .name em { font-style: italic; color: var(--ember); font-variation-settings: "opsz" 96, "SOFT" 100; }
+.slide-cpu .card .desc {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(13px, 1.5vw, 16px);
+  line-height: 1.4; color: var(--ink-dim); letter-spacing: -.005em;
+}
+.slide-cpu .card .desc b { font-style: normal; color: var(--ink); font-weight: 500; }
+.slide-cpu .card .codetag {
+  display: inline-block;
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: .04em; color: var(--ink-dim);
+  padding: 4px 10px;
+  width: fit-content;
+}
+.slide-cpu .card .perf {
+  margin-top: auto;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-top: 10px; border-top: 1px dashed var(--rule);
+}
+.slide-cpu .card .perf .l {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-cpu .card .perf .v {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; color: var(--lime);
+  font-size: clamp(24px, 2.6vw, 36px);
+  line-height: 1; letter-spacing: -.025em;
+}
+
+/* =============== PARALLELISM (shared) =============== */
+.slide-par .body {
+  display: grid; grid-template-columns: 5fr 4fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 2vh 2.4vw;
+}
+.slide-par .body > .headline { grid-column: 1 / -1; font-size: clamp(34px, 5.2vw, 68px); }
+.slide-par .stage { background: var(--bg-soft); border: 1px solid var(--rule); position: relative; overflow: hidden; }
+.slide-par .stage canvas { display: block; width: 100%; height: 100%; }
+.slide-par .stage .tag-tl, .slide-par .stage .tag-br {
+  position: absolute; font-family: var(--mono); font-size: 10px;
+  letter-spacing: .2em; color: var(--ink-dim); text-transform: uppercase;
+}
+.slide-par .stage .tag-tl { top: 14px; left: 18px; }
+.slide-par .stage .tag-br { bottom: 14px; right: 18px; text-align: right; }
+.slide-par .stage .tag-tl .v {
+  display: block;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; color: var(--ember);
+  font-size: 44px; line-height: .9; margin-top: 2px;
+}
+.slide-par .stage .tag-br .v {
+  display: block;
+  font-family: var(--display);
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-weight: 280; color: var(--lime);
+  font-size: 40px; line-height: .9; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.slide-par .right { display: flex; flex-direction: column; gap: clamp(12px, 1.8vh, 22px); justify-content: center; }
+.slide-par .scale {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 320; color: var(--ember);
+  font-size: clamp(44px, 5.4vw, 76px);
+  letter-spacing: -.04em; line-height: .9;
+}
+.slide-par .scale .small {
+  font-family: var(--mono); font-style: normal;
+  font-size: 11px; letter-spacing: .2em;
+  color: var(--ink-dim); text-transform: uppercase;
+  display: block; margin-top: 4px;
+}
+.slide-par .slider-wrap { display: flex; flex-direction: column; gap: 6px; }
+.slide-par .slider-wrap .lbl {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+.slide-par .slider-wrap .lbl .num {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 22px; color: var(--ember); letter-spacing: -.02em;
+}
+.slide-par input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 2px; background: var(--rule); outline: none;
+}
+.slide-par input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; background: var(--ember); border: 0; cursor: pointer;
+}
+.slide-par input[type=range]::-moz-range-thumb {
+  width: 18px; height: 18px; background: var(--ember); border: 0; cursor: pointer;
+}
+.slide-par .ticks {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-par .ticks span:first-child { text-align: left; }
+.slide-par .ticks span:last-child  { text-align: right; }
+.slide-par .ticks span             { text-align: center; }
+.slide-par .pseudocode {
+  background: var(--bg-card); border: 1px solid var(--rule);
+  padding: 12px 14px;
+  font-family: var(--mono); font-size: clamp(10px, 1.1vw, 12px);
+  line-height: 1.5; color: var(--ink-dim);
+  letter-spacing: .02em;
+}
+.slide-par .pseudocode .k  { color: var(--ember); }
+.slide-par .pseudocode .v  { color: var(--lime); }
+.slide-par .pseudocode .c  { color: var(--ink-mute); }
+.slide-par .key-insight {
+  grid-column: 1 / -1;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(15px, 1.8vh, 19px);
+  color: var(--ink-dim); text-align: center;
+  border-top: 1px solid var(--rule); padding-top: 10px;
+}
+.slide-par .key-insight b {
+  font-style: normal; font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+  color: var(--lime);
+}
+
+/* =============== MEMORY HIERARCHY =============== */
+.slide-mem .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-mem .body > .headline { font-size: clamp(34px, 5.4vw, 70px); }
+.slide-mem .pyramid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-mem .layer {
+  background: var(--bg);
+  padding: clamp(16px, 2.4vh, 28px) clamp(14px, 1.6vw, 22px);
+  display: flex; flex-direction: column; gap: 12px;
+  position: relative;
+}
+.slide-mem .layer .tier {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--ember);
+}
+.slide-mem .layer .where {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(20px, 2.2vw, 28px);
+  color: var(--ink); letter-spacing: -.02em; line-height: 1;
+}
+.slide-mem .layer .scope {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-mem .layer .what {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(12px, 1.4vw, 15px);
+  line-height: 1.35; color: var(--ink-dim);
+}
+.slide-mem .layer .what b { font-style: normal; color: var(--ink); font-weight: 500; }
+.slide-mem .layer .sz {
+  margin-top: auto;
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: clamp(20px, 2.2vw, 28px);
+  color: var(--lime); letter-spacing: -.02em; line-height: 1;
+  padding-top: 10px; border-top: 1px dashed var(--rule);
+}
+.slide-mem .key {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(15px, 1.8vh, 19px);
+  text-align: center; color: var(--ink-dim);
+  border-top: 1px solid var(--rule); padding-top: 10px;
+}
+.slide-mem .key b { font-style: normal; color: var(--ink); font-weight: 500; }
+
+/* =============== VERIFICATION =============== */
+.slide-ver .body { display: grid; grid-template-columns: 4fr 5fr; grid-template-rows: auto 1fr; gap: 2vh 2.5vw; }
+.slide-ver .body > .headline { grid-column: 1 / -1; font-size: clamp(34px, 5.4vw, 70px); }
+.slide-ver .left {
+  display: flex; flex-direction: column; gap: clamp(12px, 1.8vh, 22px);
+  justify-content: center;
+}
+.slide-ver .pull {
+  font-family: var(--display); font-style: italic; font-weight: 320;
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-size: clamp(40px, 6vw, 88px);
+  color: var(--lime); line-height: .9; letter-spacing: -.04em;
+}
+.slide-ver .pull .small {
+  font-family: var(--mono); font-style: normal;
+  font-size: 12px; letter-spacing: .2em;
+  color: var(--ink-dim); text-transform: uppercase;
+  display: block; margin-top: 8px;
+}
+.slide-ver .lead {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(15px, 1.8vh, 19px);
+  line-height: 1.4; color: var(--ink-dim); max-width: 40ch;
+}
+.slide-ver .lead b { font-style: normal; color: var(--ink); font-weight: 500; }
+.slide-ver .right {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: clamp(16px, 2vh, 24px) clamp(18px, 2vw, 26px);
+  display: flex; flex-direction: column;
+  gap: 6px;
+}
+.slide-ver .right .h {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--ember); text-transform: uppercase; margin-bottom: 8px;
+}
+.slide-ver .test {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: baseline; gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--rule);
+}
+.slide-ver .test:last-child { border-bottom: 0; }
+.slide-ver .test .name {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--ink); letter-spacing: .04em;
+}
+.slide-ver .test .count {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 16px; color: var(--lime); letter-spacing: -.01em;
+}
+.slide-ver .test .count.fail { color: var(--ember-dim); }
+
+/* =============== BENCHMARK CHART (shared) =============== */
+.slide-bench .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-bench .body > .headline { font-size: clamp(34px, 5.2vw, 68px); }
+.slide-bench .chart {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: clamp(16px, 2vh, 26px) clamp(20px, 2.4vw, 32px);
+  display: flex; flex-direction: column; gap: clamp(6px, .8vh, 12px);
+}
+.slide-bench .chart .bar-row {
+  display: grid; grid-template-columns: 220px 1fr 110px;
+  align-items: center; gap: 16px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  color: var(--ink-dim); text-transform: uppercase;
+  transition: background .15s ease; padding: 2px 4px; margin: 0 -4px;
+}
+.slide-bench .chart .bar-row:hover { background: rgba(255,107,53,0.06); }
+.slide-bench .chart .bar-row .label { display: flex; flex-direction: column; gap: 2px; }
+.slide-bench .chart .bar-row .label .name {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 36, "SOFT" 100;
+  font-size: clamp(14px, 1.5vw, 20px);
+  color: var(--ink); letter-spacing: -.01em; text-transform: none; line-height: 1;
+}
+.slide-bench .chart .bar-row .label .name b { font-style: normal; font-variation-settings: "opsz" 36, "SOFT" 30; font-weight: 500; }
+.slide-bench .chart .bar-row .label .sub {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+  color: var(--ink-mute);
+}
+.slide-bench .chart .bar-row .bar-wrap { position: relative; height: 26px; }
+.slide-bench .chart .bar-row .bar {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: var(--bar-color, var(--ember));
+  transition: width .9s cubic-bezier(.2,.7,.2,1);
+}
+.slide-bench .chart .bar-row .bar::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+}
+.slide-bench .chart .bar-row .val {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(20px, 2vw, 28px);
+  color: var(--bar-color, var(--ember));
+  text-align: right; letter-spacing: -.02em;
+  text-transform: none; font-variant-numeric: tabular-nums;
+}
+.slide-bench .chart .axis {
+  display: grid; grid-template-columns: 220px 1fr 110px;
+  gap: 16px; padding: 2px 4px;
+  border-top: 1px dashed var(--rule); padding-top: 8px;
+}
+.slide-bench .chart .axis .ticks {
+  grid-column: 2 / 3;
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-bench .chart .axis .ticks span:first-child { text-align: left; }
+.slide-bench .chart .axis .ticks span:last-child  { text-align: right; }
+.slide-bench .chart .axis .ticks span             { text-align: center; }
+.slide-bench .footnote {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .15em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-bench .footnote .big {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 14px; text-transform: none; letter-spacing: -.005em; color: var(--ink-dim);
+}
+.slide-bench .footnote .big b {
+  font-style: normal; font-variation-settings: "opsz" 60, "SOFT" 30; font-weight: 500; color: var(--lime);
+}
+
+/* =============== TRADE-OFFS =============== */
+.slide-trade .body { display: grid; grid-template-rows: auto 1fr auto; gap: 2vh; }
+.slide-trade .body > .headline { font-size: clamp(34px, 5.2vw, 66px); }
+.slide-trade .grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-trade .cell {
+  background: var(--bg);
+  padding: clamp(16px, 2.4vh, 28px) clamp(16px, 1.8vw, 26px);
+  display: flex; flex-direction: column; gap: clamp(10px, 1.4vh, 18px);
+}
+.slide-trade .cell .tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--ember); text-transform: uppercase;
+}
+.slide-trade .cell .title {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: clamp(22px, 2.4vw, 32px);
+  letter-spacing: -.025em; line-height: 1.1;
+}
+.slide-trade .cell .title em { font-style: italic; color: var(--ember); font-variation-settings: "opsz" 96, "SOFT" 100; }
+.slide-trade .cell .body-txt {
+  font-family: var(--display); font-style: italic; font-weight: 350;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(14px, 1.5vw, 17px);
+  line-height: 1.45; color: var(--ink-dim); letter-spacing: -.005em;
+}
+.slide-trade .cell .body-txt b {
+  font-style: normal; color: var(--ink); font-weight: 500;
+  font-variation-settings: "opsz" 60, "SOFT" 30;
+}
+.slide-trade .cell .meas {
+  margin-top: auto;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--lime); text-transform: uppercase;
+  padding-top: 8px; border-top: 1px dashed var(--rule);
+}
+.minibar { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.minibar .row {
+  display: grid; grid-template-columns: 60px 1fr auto;
+  align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+.minibar .row .bar-wrap { position: relative; height: 8px; background: var(--bg-soft); }
+.minibar .row .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--mbcolor, var(--ember)); width: 0; transition: width 1s cubic-bezier(.2,.7,.2,1); }
+.minibar .row .v {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 14px; color: var(--mbcolor, var(--ember));
+  text-transform: none; letter-spacing: -.01em; font-variant-numeric: tabular-nums;
+}
+
+/* =============== TAKE-AWAY =============== */
+.slide-end .body { display: grid; grid-template-rows: auto 1fr auto; gap: 3vh; }
+.slide-end .body > .headline { font-size: clamp(40px, 6.5vw, 92px); max-width: 18ch; }
+.slide-end .insights {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+}
+.slide-end .insight {
+  background: var(--bg);
+  padding: clamp(20px, 2.8vh, 36px) clamp(20px, 2.2vw, 32px);
+  display: flex; flex-direction: column; gap: clamp(12px, 1.5vh, 20px);
+}
+.slide-end .insight .ix {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100;
+  font-weight: 320; font-size: 44px;
+  color: var(--ember); line-height: 1; letter-spacing: -.02em;
+}
+.slide-end .insight .txt {
+  font-family: var(--display); font-weight: 320;
+  font-variation-settings: "opsz" 60, "SOFT" 40;
+  font-size: clamp(16px, 1.7vw, 20px);
+  line-height: 1.3; letter-spacing: -.015em; color: var(--ink);
+}
+.slide-end .insight .txt em { font-style: italic; font-variation-settings: "opsz" 60, "SOFT" 100; color: var(--lime); }
+.slide-end .insight .meas {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase; margin-top: auto;
+}
+.slide-end .repo {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .15em;
+  color: var(--ink-dim); text-transform: uppercase; padding-top: 6px;
+}
+.slide-end .repo .url {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(15px, 1.5vw, 20px);
+  color: var(--ink); text-transform: none; letter-spacing: -.01em;
+}
+.slide-end .repo .url::before { content: "→ "; color: var(--ember); }
+
+/* =============== CHROME =============== */
+.progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rule); z-index: 100;
+}
+.progress > .bar { height: 100%; background: linear-gradient(to right, var(--ember), var(--lime)); width: 0%; transition: width .2s ease-out; }
+.hint {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .25em;
+  color: var(--ink-dim); text-transform: uppercase;
+  opacity: .5; pointer-events: none; z-index: 100;
+}
+.hint kbd {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 2px 6px; border-radius: 2px; color: var(--ink); margin: 0 2px;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.slide.active .anim { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.slide.active .anim-1 { animation-delay: .05s; }
+.slide.active .anim-2 { animation-delay: .16s; }
+.slide.active .anim-3 { animation-delay: .28s; }
+.slide.active .anim-4 { animation-delay: .40s; }
+.slide.active .anim-5 { animation-delay: .52s; }
+.slide:not(.active) .anim { opacity: 0; transform: translateY(16px); }
+
+/* =============== INTERACTIVE WIDGETS ADDED FOR PARITY WITH SHORT =============== */
+
+/* Slide 02 — motivation: PRF box animated */
+.slide-motiv .prf-box {
+  display: grid; grid-template-columns: auto auto auto;
+  align-items: center; gap: clamp(10px, 1.4vw, 18px);
+  padding: 14px 0;
+}
+.slide-motiv .prf-box .lane {
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+  color: var(--ink-mute); text-transform: uppercase;
+  min-width: 0;
+}
+.slide-motiv .prf-box .lane .bits {
+  display: flex; gap: 3px;
+}
+.slide-motiv .prf-box .lane .bits .b {
+  width: clamp(8px, 1vw, 12px); height: 16px;
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  transition: background .25s ease, border-color .25s ease;
+}
+.slide-motiv .prf-box .lane .bits .b.on  { background: var(--ink-dim); border-color: var(--ink-dim); }
+.slide-motiv .prf-box .lane .bits .b.hot { background: var(--ember); border-color: var(--ember); }
+.slide-motiv .prf-box .lane .bits .b.gen { background: var(--lime); border-color: var(--lime); }
+.slide-motiv .prf-box .arrow {
+  font-family: var(--mono); font-size: 18px; color: var(--ember);
+  font-weight: 400; letter-spacing: 0; padding: 0 4px;
+}
+.slide-motiv .prf-box .pbox {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: clamp(18px, 2vw, 24px); color: var(--ink);
+  background: var(--bg-card); border: 1px solid var(--ember);
+  padding: 10px 14px; letter-spacing: -.01em;
+}
+.slide-motiv .prf-box .pbox em { color: var(--ember); }
+
+/* Slide 04 — task: animated check badges */
+.slide-task .req .ix-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.slide-task .req .ix-badge .pill {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 3px 8px; color: var(--ember); text-transform: uppercase;
+}
+.slide-task .req .mini-viz {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 12px; height: clamp(58px, 8vh, 86px);
+  display: flex; align-items: center; justify-content: center;
+}
+.slide-task .req .mini-viz svg { display: block; width: 100%; height: 100%; }
+.task-stroke { stroke: var(--ember); stroke-width: 1.5; fill: none; }
+.task-stroke-2 { stroke: var(--lime); stroke-width: 1.5; fill: none; }
+.task-fill { fill: var(--ember); }
+.task-fill-2 { fill: var(--lime); }
+.task-dim { fill: var(--ink-mute); }
+
+/* Slide 06 — AES kernel variant mini-vizzes */
+.slide-kvar .cell .mini {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 10px 12px; height: clamp(60px, 8.5vh, 90px);
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative; overflow: hidden;
+}
+.slide-kvar .cell .mini .mt {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-kvar .cell .mini svg { display: block; width: 100%; flex: 1; }
+.kv-cell { fill: var(--bg-card); stroke: var(--rule); stroke-width: 0.4; }
+.kv-cell.hot { fill: var(--ember); stroke: var(--ember); }
+.kv-strip-bg { fill: var(--bg-card); stroke: var(--rule); stroke-width: 0.5; }
+.kv-strip-hot { fill: var(--ember); stroke: var(--ember); stroke-width: 0; transition: opacity .35s ease; }
+.kv-lane { fill: var(--bg-card); stroke: var(--rule); stroke-width: 0.4; }
+.kv-lane.hot { fill: var(--ember); stroke: var(--ember); }
+
+/* Slide 08 — comparison: stat rows pulse on enter */
+.slide-cmp .col dl dd {
+  position: relative;
+}
+.slide-cmp .col dl dd.flash::before {
+  content: ""; position: absolute; inset: -2px -6px;
+  background: var(--accent); opacity: 0;
+  animation: dflash .9s ease both;
+  z-index: -1;
+}
+@keyframes dflash {
+  0%   { opacity: 0; transform: scaleX(0); transform-origin: left center; }
+  20%  { opacity: .14; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+.slide-cmp .vs .x.spin {
+  animation: spinX 1.4s ease-out both;
+}
+@keyframes spinX {
+  from { opacity: 0; transform: rotate(-90deg) scale(.6); }
+  to   { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+/* Slide 09 — architecture: connector pulse between cpu/gpu */
+.slide-arch .layer .pulse-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); margin-left: 8px;
+  box-shadow: 0 0 0 0 var(--accent);
+  animation: dotPulse 1.8s ease-out infinite;
+}
+.slide-arch .col.cpu .layer .pulse-dot { --accent: var(--ember); background: var(--ember); }
+.slide-arch .col.gpu .layer .pulse-dot { --accent: var(--lime); background: var(--lime); }
+@keyframes dotPulse {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  70%  { box-shadow: 0 0 0 10px transparent; opacity: .7; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
+/* Slide 10 — CPU baselines: thread mini-vizzes */
+.slide-cpu .card .thr {
+  background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 14px 16px;
+  display: flex; align-items: center; justify-content: center;
+  gap: clamp(4px, 0.8vw, 8px);
+  height: clamp(56px, 8vh, 76px);
+  position: relative;
+}
+.slide-cpu .card .thr .dot {
+  width: clamp(10px, 1.4vw, 16px); height: clamp(10px, 1.4vw, 16px);
+  background: var(--rule); border-radius: 50%;
+  transition: background .25s ease;
+}
+.slide-cpu .card .thr .dot.lit {
+  background: var(--ember);
+  box-shadow: 0 0 8px rgba(255,107,53,0.6);
+}
+.slide-cpu .card .thr .badge {
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: .2em;
+  background: var(--ember); color: var(--bg);
+  padding: 3px 8px; text-transform: uppercase;
+  margin-left: 12px;
+  font-weight: 500;
+}
+.slide-cpu .card .thr .label-l {
+  position: absolute; bottom: 4px; left: 8px;
+  font-family: var(--mono); font-size: 8px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+
+/* Slide 12 — memory tier size bars (log scale) */
+.slide-mem .layer .mem-bar {
+  height: 6px; background: var(--bg-soft); position: relative;
+  margin-top: 6px;
+}
+.slide-mem .layer .mem-bar .fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--lime); width: 0;
+  transition: width 1.2s cubic-bezier(.2,.7,.2,1);
+}
+
+/* Slide 13 — verification test runner */
+.slide-ver .right .runner-bar {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.slide-ver .right .runner-bar .progress {
+  flex: 1; height: 3px; background: var(--bg-card);
+  border: 1px solid var(--rule); position: relative;
+}
+.slide-ver .right .runner-bar .progress .fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--lime); width: 0;
+  transition: width 2.2s cubic-bezier(.4,.2,.2,1);
+}
+.slide-ver .right .runner-bar .pct {
+  font-family: var(--display); font-style: italic;
+  font-variation-settings: "opsz" 60, "SOFT" 100;
+  font-size: 16px; color: var(--lime);
+  text-transform: none; letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+.slide-ver .test {
+  opacity: 0; transform: translateY(6px);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.slide-ver.run .test { opacity: 1; transform: translateY(0); }
+.slide-ver .test .check {
+  display: inline-block; width: 14px; height: 14px;
+  background: var(--bg-card); border: 1px solid var(--rule);
+  margin-right: 8px; vertical-align: middle;
+  position: relative;
+}
+.slide-ver .test .check.pass {
+  background: var(--lime); border-color: var(--lime);
+}
+.slide-ver .test .check.pass::after {
+  content: "✓"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--bg); font-size: 11px; font-weight: 700;
+}
+
+/* Slide 16 — take-away: insight mini-viz containers */
+.slide-end .insight .viz {
+  height: clamp(70px, 11vh, 120px);
+  display: flex; align-items: center; justify-content: center;
+}
+.slide-end .insight .viz svg {
+  display: block; width: 100%; height: 100%;
+}
+
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+  .deck { height: 100dvh; }
+  section.slide { height: 100dvh; }
+}
+@media (max-width: 900px) {
+  .head, .foot { font-size: 9.5px; letter-spacing: .12em; }
+  .eyebrow { font-size: 9.5px; letter-spacing: .2em; gap: 10px; }
+  .eyebrow .ix { font-size: 22px; }
+  .hint { display: none; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  section.slide { padding: clamp(12px, 3vh, 22px) clamp(18px, 3.4vw, 40px); gap: clamp(6px, 1vh, 12px); }
+  .slide-title h1 { font-size: clamp(50px, 12vw, 130px); }
+  .slide-title h1 .sub { font-size: .14em; margin-top: .55em; }
+  .slide-title .deco-tree { width: 46vw; height: 60vh; right: -4vw; top: 4vh; }
+  .slide-title .meta .row { font-size: 8.5px; }
+  .slide-motiv .body > .headline,
+  .slide-tree .top .headline,
+  .slide-task .body > .headline,
+  .prim-deep .body > .headline,
+  .slide-kvar .body > .headline,
+  .slide-cmp .body > .headline,
+  .slide-arch .body > .headline,
+  .slide-cpu .body > .headline,
+  .slide-par .body > .headline,
+  .slide-mem .body > .headline,
+  .slide-ver .body > .headline,
+  .slide-bench .body > .headline,
+  .slide-trade .body > .headline { font-size: clamp(20px, 4.2vw, 36px); }
+  .prim-deep .stage .meta .phase { font-size: 14px; }
+  .prim-deep .stage .meta .round { font-size: 22px; }
+  .aes-state { max-width: 180px; }
+  .prim-deep .ops { padding: 8px 10px; }
+  .prim-deep .ops .op .desc { font-size: 12px; }
+  .prim-deep .ops .op .n { font-size: 14px; }
+  .prim-deep .stats-row .stat .v { font-size: 18px; }
+  .slide-kvar .cell { padding: 10px 12px; gap: 8px; }
+  .slide-kvar .cell .name { font-size: clamp(18px, 2.2vw, 24px); }
+  .slide-kvar .cell .perf .v { font-size: clamp(18px, 2vw, 24px); }
+  .slide-kvar .footnote { font-size: 11px; padding-top: 6px; }
+  .slide-cmp .col { padding: 10px 14px; }
+  .slide-cmp .col .name { font-size: clamp(22px, 2.6vw, 32px); }
+  .slide-cmp .vs .x { font-size: 38px; }
+  .slide-cmp .gap-line .big { font-size: clamp(26px, 3.2vw, 40px); }
+  .slide-arch .stack { gap: 8px 14px; }
+  .slide-arch .layer { padding: 10px 12px; }
+  .slide-arch .layer .name { font-size: clamp(13px, 1.6vw, 17px); }
+  .slide-arch .layer .files { font-size: 9px; }
+  .slide-cpu .card { padding: 10px 14px; gap: 8px; }
+  .slide-cpu .card .name { font-size: clamp(18px, 2.2vw, 24px); }
+  .slide-cpu .card .desc { font-size: 12px; line-height: 1.3; }
+  .slide-cpu .card .perf .v { font-size: clamp(20px, 2.2vw, 28px); }
+  .slide-par .scale { font-size: clamp(28px, 4.4vw, 50px); }
+  .slide-par .pseudocode { padding: 8px 10px; font-size: 10px; }
+  .slide-par .stage .tag-tl .v, .slide-par .stage .tag-br .v { font-size: 22px; }
+  .slide-mem .layer { padding: 10px 12px; gap: 6px; }
+  .slide-mem .layer .where { font-size: clamp(14px, 1.8vw, 20px); }
+  .slide-mem .layer .what { font-size: 11px; line-height: 1.25; }
+  .slide-mem .layer .sz { font-size: clamp(14px, 1.8vw, 20px); padding-top: 6px; }
+  .slide-mem .key { font-size: 12px; padding-top: 6px; }
+  .slide-ver .pull { font-size: clamp(28px, 5vw, 56px); }
+  .slide-ver .test .name { font-size: 10px; }
+  .slide-ver .test .count { font-size: 13px; }
+  .slide-bench .chart { padding: 8px 12px; gap: 2px; }
+  .slide-bench .chart .bar-row { grid-template-columns: 120px 1fr 64px; gap: 8px; padding: 1px 2px; font-size: 8.5px; }
+  .slide-bench .chart .bar-row .label .name { font-size: 11px; line-height: 1; }
+  .slide-bench .chart .bar-row .label .sub { font-size: 8px; }
+  .slide-bench .chart .bar-row .bar-wrap { height: 12px; }
+  .slide-bench .chart .bar-row .val { font-size: 14px; }
+  .slide-bench .chart .axis { grid-template-columns: 120px 1fr 64px; padding-top: 4px; }
+  .slide-bench .footnote { font-size: 8.5px; padding-top: 4px; }
+  .slide-trade .cell { padding: 12px 14px; gap: 8px; }
+  .slide-trade .cell .title { font-size: clamp(16px, 2.2vw, 24px); }
+  .slide-trade .cell .body-txt { font-size: 12px; line-height: 1.3; }
+  .minibar .row { grid-template-columns: 48px 1fr auto; gap: 6px; font-size: 8px; }
+  .minibar .row .v { font-size: 11px; }
+  .slide-end .body > .headline { font-size: clamp(28px, 5.4vw, 56px); }
+  .slide-end .insight { padding: 10px 14px; gap: 8px; }
+  .slide-end .insight .ix { font-size: 26px; }
+  .slide-end .insight .txt { font-size: clamp(12px, 1.6vw, 16px); line-height: 1.25; }
+}
+@media (max-width: 600px) {
+  section.slide { padding: clamp(16px, 3vh, 26px) clamp(16px, 5vw, 24px); gap: clamp(8px, 1.4vh, 16px); }
+  .slide-title .body, .slide-motiv .body, .prim-deep .body, .slide-par .body, .slide-ver .body { grid-template-columns: 1fr; }
+  .slide-title h1 { grid-column: 1; font-size: clamp(46px, 16vw, 100px); }
+  .slide-task .reqs, .slide-cmp .compare, .slide-arch .stack, .slide-cpu .cards, .slide-mem .pyramid, .slide-trade .grid, .slide-end .insights, .slide-kvar .grid { grid-template-columns: 1fr; }
+  .slide-cmp .vs { padding: 14px 0; }
+  .slide-cmp .vs .x { font-size: 42px; }
+  .slide-cmp .vs .label { writing-mode: horizontal-tb; transform: none; }
+  .slide-bench .chart .bar-row { grid-template-columns: 96px 1fr 52px; gap: 6px; }
+  .slide-bench .chart .axis { grid-template-columns: 96px 1fr 52px; }
+  .aes-state { max-width: 220px; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .slide-bench .chart .bar-row:active { background: rgba(255,107,53,0.10); }
+  .slide-tree .replay:active { color: var(--ember); border-color: var(--ember); }
+}
 </style>
 </head>
 <body>
-<div class="deck">
 
-  <!-- 1: Title -->
-  <section>
-    <h1>GGM Tree on GPU</h1>
-    <p class="lead">AES-128 vs Spongent-π[176] on NVIDIA RTX 3060</p>
-    <p>UCSD ECE 268 Hardware Security · Final Project · Spring 2026</p>
-    <p class="lead">Member 1 · Member 2 · Member 3</p>
-  </section>
+<div class="progress"><div class="bar" id="bar"></div></div>
 
-  <!-- 2: Why GGM -->
-  <section>
-    <h3>Background</h3>
-    <h2>What is a GGM tree?</h2>
-    <p>Goldreich, Goldwasser, Micali (1986): build a PRF from any length-doubling PRG.</p>
-    <pre>
-G : {0,1}^n → {0,1}^{2n},  split as G(s) = (G_0(s), G_1(s))
+<main class="deck" id="deck">
 
-For input x = x_1 x_2 … x_d :
-  F_K(x) = G_{x_d}( G_{x_{d-1}}( … G_{x_2}( G_{x_1}(K) ) … ) )
-    </pre>
-    <p>Equivalently: walk the binary tree of depth $d$ from root $K$, choosing the
-       $x_i$-th child at level $i$.</p>
-    <p>Full expansion: $2^{d+1} - 1$ nodes × 16 B. At $d{=}24$ that's 512 MB.</p>
-  </section>
-
-  <!-- 3: AES PRG -->
-  <section>
-    <h3>PRG choice 1</h3>
-    <h2>AES-128 as a PRG</h2>
-    <pre>
-Variable-key:   G(s) = AES_s(0) || AES_s(1)
-                (s is reinterpreted as a fresh AES key per node)
-
-Fixed-key:      G(s) = AES_K(s) || AES_K(s ⊕ 0x01)
-                (public K, round keys precomputed once)
-    </pre>
-    <ul>
-      <li>Variable-key: canonical GGM-from-PRF reading; one key schedule per node</li>
-      <li>Fixed-key: faster on GPU; security argument is PRP-based</li>
-      <li>CPU has hardware support: <strong>AES-NI</strong> instructions
-          (<code>_mm_aesenc_si128</code>, <code>_mm_aesenclast_si128</code>)</li>
-    </ul>
-  </section>
-
-  <!-- 4: Spongent PRG -->
-  <section>
-    <h3>PRG choice 2</h3>
-    <h2>Spongent-π[176] as a PRG</h2>
-    <p>Bogdanov et al., CHES 2011 — lightweight hash designed for hardware area.</p>
-    <pre>
-G(s) = π[176](s || 0x00)[0..15]  ||  π[176](s || 0x01)[0..15]
-
-π[176]: 176-bit state, 80 rounds, each round:
-  1. AddCounter   (7-bit LFSR XOR at fixed positions)
-  2. SBoxLayer    (PRESENT 4-bit S-box per nibble)
-  3. pLayer       (j → (j × 44) mod 175)
-    </pre>
-    <p>No CPU hardware support; everything bit-level.</p>
-  </section>
-
-  <!-- 5: Architecture -->
-  <section>
-    <h3>Architecture</h3>
-    <h2>Project layout</h2>
-    <pre>
-ggm-tree/
-├── src/ggm/
-│   ├── tree.py           # GGMTree public API
-│   ├── host.py           # PyCUDA loader + launchers
-│   ├── ctypes_iface.py   # ctypes → libggmcpu.so
-│   ├── kernels/*.cu      # AES + Spongent CUDA
-│   └── cpu/              # C reference + AES-NI + OpenMP
-├── bench/                # measurement + grid driver + plots
-├── tests/                # 35 pytest cells, CPU + GPU
-└── report/, slides/      # IEEE LaTeX + HTML decks
-    </pre>
-  </section>
-
-  <!-- 6: GPU memory layout -->
-  <section>
-    <h3>Implementation</h3>
-    <h2>GPU memory hierarchy</h2>
-    <table>
-      <tr><th>Resource</th><th>Location</th><th>Size</th></tr>
-      <tr><td>AES S-box</td><td>__constant__</td><td>256 B</td></tr>
-      <tr><td>AES T-tables</td><td>__shared__ per block</td><td>4 KB</td></tr>
-      <tr><td>Round keys (var-key)</td><td>registers</td><td>176 B/thread</td></tr>
-      <tr><td>Round keys (fixed-key)</td><td>__constant__</td><td>176 B</td></tr>
-      <tr><td>Spongent state</td><td>registers</td><td>22 B/thread</td></tr>
-      <tr><td>Tree storage</td><td>global</td><td>up to 256 MB</td></tr>
-    </table>
-    <p>BFS layout: parent at index $i$, children at $2i+1, 2i+2$ — naturally coalesced (16 B × 32 threads = 512 B contiguous reads/writes per warp).</p>
-  </section>
-
-  <!-- 7: Parallelism -->
-  <section>
-    <h3>Implementation</h3>
-    <h2>Per-level kernel launch</h2>
-    <pre>
-For ℓ = 0 … d − 1:
-  total_threads = 2^ℓ
-  block         = min(256, 2^ℓ)
-  kernel&lt;&lt;&lt;ceil(2^ℓ / block), block&gt;&gt;&gt;(tree, ℓ)
-
-Each thread:
-  parent = tree[(2^ℓ - 1) + i]
-  (c0, c1) = G(parent)
-  tree[(2^(ℓ+1) - 1) + 2i]     = c0
-  tree[(2^(ℓ+1) - 1) + 2i + 1] = c1
-    </pre>
-    <p>Trivially correct, exposes the "GPU underutilized at small ℓ" story.</p>
-  </section>
-
-  <!-- 8: Verification -->
-  <section>
-    <h3>Verification</h3>
-    <h2>Bit-exact cross-backend</h2>
-    <ul>
-      <li>FIPS-197 Appendix C.1 vector → all AES backends</li>
-      <li>Frozen 31-node GGM-AES tree at $d{=}4$, seed = FIPS-197 key</li>
-      <li>Frozen 31-node GGM-Spongent tree at $d{=}4$</li>
-      <li>Every backend × kernel × thread-count matches byte-for-byte</li>
-    </ul>
-    <p class="lead">All 35 pytest cells pass on the RTX 3060: 13 CPU + 4 Spongent + 18 GPU.</p>
-    <p>Spongent constants are paper-cross-validation TODO (we have internal consistency only).</p>
-  </section>
-
-  <!-- 9: Results — AES throughput -->
-  <section>
-    <h3>Results</h3>
-    <h2>AES throughput vs depth</h2>
-    <div class="figure-row">
-      <img src="../../report/figures/throughput_aes.png" alt="AES throughput">
-      <div>
-        <ul>
-          <li>GPU T-tables overtakes CPU AES-NI around $d{\approx}10$</li>
-          <li>CPU AES-NI cache cliff past $d{=}14$ (tree exceeds L3)</li>
-          <li>CPU OpenMP $t{=}16$ on 8-core box: <em>oversubscribed</em>, throughput collapses</li>
-        </ul>
+  <!-- ============ 01 · TITLE ============ -->
+  <section class="slide slide-title" data-i="1">
+    <header class="head">
+      <span><span class="dot">●</span> UCSD ECE 268 · HARDWARE SECURITY · SPRING 2026</span>
+      <span class="nav"><span class="now">01</span> / 16</span>
+    </header>
+    <div class="body">
+      <svg class="deco-tree" viewBox="0 0 600 700">
+        <g>
+          <circle cx="300" cy="40" r="5"/>
+          <line x1="300" y1="40" x2="160" y2="160"/><line x1="300" y1="40" x2="440" y2="160"/>
+          <circle cx="160" cy="160" r="4"/><circle cx="440" cy="160" r="4"/>
+          <line x1="160" y1="160" x2="80" y2="280"/><line x1="160" y1="160" x2="240" y2="280"/>
+          <line x1="440" y1="160" x2="360" y2="280"/><line x1="440" y1="160" x2="520" y2="280"/>
+          <circle cx="80" cy="280" r="3.5"/><circle cx="240" cy="280" r="3.5"/>
+          <circle cx="360" cy="280" r="3.5"/><circle cx="520" cy="280" r="3.5"/>
+          <line x1="80" y1="280" x2="40" y2="400"/><line x1="80" y1="280" x2="120" y2="400"/>
+          <line x1="240" y1="280" x2="200" y2="400"/><line x1="240" y1="280" x2="280" y2="400"/>
+          <line x1="360" y1="280" x2="320" y2="400"/><line x1="360" y1="280" x2="400" y2="400"/>
+          <line x1="520" y1="280" x2="480" y2="400"/><line x1="520" y1="280" x2="560" y2="400"/>
+          <circle cx="40" cy="400" r="3"/><circle cx="120" cy="400" r="3"/>
+          <circle cx="200" cy="400" r="3"/><circle cx="280" cy="400" r="3"/>
+          <circle cx="320" cy="400" r="3"/><circle cx="400" cy="400" r="3"/>
+          <circle cx="480" cy="400" r="3"/><circle cx="560" cy="400" r="3"/>
+        </g>
+      </svg>
+      <h1 class="anim anim-1">
+        <span class="ggm">GGM</span><br>Tree on<br>GPU.
+        <span class="sub">AES-128 · Spongent-π[176] · RTX 3060</span>
+      </h1>
+      <div class="meta anim anim-3">
+        <div class="row"><span class="label">format</span><span class="val"><em>10</em>-minute version</span></div>
+        <div class="row"><span class="label">group size</span><span class="val"><em>3</em> members</span></div>
+        <div class="row"><span class="label">GPU</span><span class="val">RTX 3060 · 12 GB</span></div>
+        <div class="row"><span class="label">CPU</span><span class="val">Ryzen 7 5700U</span></div>
       </div>
     </div>
+    <footer class="foot">
+      <span class="sig">UC San Diego · Department of ECE</span>
+      <span>LONG DECK · 10:00</span>
+    </footer>
   </section>
 
-  <!-- 10: Results — AES vs Spongent -->
-  <section>
-    <h3>Results</h3>
-    <h2>AES vs Spongent on GPU</h2>
-    <div class="figure-row">
-      <img src="../../report/figures/aes_vs_spongent.png" alt="AES vs Spongent">
-      <div>
-        <p>Gap is consistent at <span class="num">~25×</span> across all depths.</p>
-        <p>Spongent's design optimizes for hardware <em>area</em>, not commodity-software throughput. 80 bit-level rounds &gt;&gt; 10 byte-level AES rounds.</p>
+  <!-- ============ 02 · MOTIVATION ============ -->
+  <section class="slide slide-motiv" data-i="2">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">01</span><span>Background</span></span>
+      <span class="nav"><span class="now">02</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">PRFs are the <em>workhorse</em> of cryptography.</h2>
+      <div class="left">
+        <p class="lead anim anim-2">
+          A <b>pseudorandom function</b> looks indistinguishable from a random function
+          to anyone without the key. They underlie session keys, MACs, key derivation,
+          puncturable encryption, anonymous credentials, and a growing list of
+          MPC primitives.
+        </p>
+        <div class="uses anim anim-3">
+          <div class="use-card"><span class="label">TLS / KDF</span><span class="where">HKDF-Extract/Expand</span></div>
+          <div class="use-card"><span class="label">MPC</span><span class="where">OT extension · DPF</span></div>
+          <div class="use-card"><span class="label">PSI</span><span class="where">private set intersection</span></div>
+          <div class="use-card"><span class="label">FHE bootstrapping</span><span class="where">key-schedule lookups</span></div>
+        </div>
+      </div>
+      <div class="right anim anim-4">
+        <div class="puzzle">
+          <div class="q">How do we get a PRF on <em>2<sup>d</sup></em> inputs from a single seed?</div>
+          <div class="a">Build a <em>tree.</em></div>
+          <div class="note">Goldreich · Goldwasser · Micali · JACM 1986</div>
+        </div>
       </div>
     </div>
+    <footer class="foot">
+      <span class="sig">why we care about a binary tree of pseudo-random bytes</span>
+      <span>scroll →</span>
+    </footer>
   </section>
 
-  <!-- 11: Trade-offs -->
-  <section>
-    <h3>Discussion</h3>
-    <h2>Trade-offs and side-channels</h2>
-    <ul>
-      <li><strong>S-box vs T-tables</strong>: T-tables 1.5–2× faster; index-dependent
-          shared-memory access introduces a bank-pattern timing channel</li>
-      <li><strong>Bitsliced</strong> (planned, time-boxed): constant-time by construction;
-          32 nodes/warp; not yet shipped — currently falls through to T-tables</li>
-      <li><strong>Fixed-key</strong>: no measurable speedup over var-key (key schedule
-          is already cheap relative to 10 rounds); would matter more for bitsliced</li>
-      <li><strong>Memory mode</strong>: full vs rolling vs leaves-only is planned future work</li>
-    </ul>
+  <!-- ============ 03 · GGM TREE ============ -->
+  <section class="slide slide-tree" data-i="3">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">02</span><span>The GGM Construction</span></span>
+      <span class="nav"><span class="now">03</span> / 16</span>
+    </header>
+    <div class="body">
+      <div class="top">
+        <h2 class="headline anim anim-1">
+          From a length-doubling PRG, a full <em>PRF tree</em>.
+        </h2>
+        <button class="replay anim anim-2" id="replay-tree" type="button">▶ replay</button>
+      </div>
+      <div class="stage anim anim-2">
+        <div class="tag-tl"><span>depth</span><span class="v" id="tree-depth">0</span></div>
+        <div class="tag-br"><span>active leaves</span><span class="v" id="tree-leaves">1</span></div>
+        <svg id="tree-svg" viewBox="0 0 1200 540" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="legend anim anim-3">
+        <div class="item node"><span class="sw"></span> <span class="it">F<sub>K</sub>(x)</span> = leaf reached by walking the bit-string x</div>
+        <div class="item path"><span class="sw"></span> 2<sup>d</sup> leaves at depth d · seed = K</div>
+        <div class="item">G(parent) = G<sub>0</sub>(parent) || G<sub>1</sub>(parent), each child 128 bits</div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">"Full tree expansion" = compute every node, level by level</span>
+      <span>scroll →</span>
+    </footer>
   </section>
 
-  <!-- 12: Conclusion -->
-  <section>
-    <h2>Conclusion</h2>
-    <ul>
-      <li>GGM construction parallelizes naturally onto GPU per-level kernels</li>
-      <li>GPU T-tables: <span class="num">~50M</span> leaves/s @ $d{=}20$ — <span class="num">6×</span> over CPU AES-NI</li>
-      <li>AES &gt;&gt; Spongent on commodity GPU (~25×) — lightweight ≠ fast</li>
-      <li>Code, plots, full report at <span class="num">github.com/…/ggm-tree</span></li>
-    </ul>
-    <h3 style="margin-top:24px">Future work</h3>
-    <ul>
-      <li>Real warp-level bitsliced AES (currently falls through to T-tables)</li>
-      <li>Rolling-buffer and leaves-only memory modes</li>
-      <li>Spongent paper cross-validation</li>
-      <li>Real side-channel timing histograms</li>
-    </ul>
+  <!-- ============ 04 · THE TASK ============ -->
+  <section class="slide slide-task" data-i="4">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">03</span><span>What the course asks</span></span>
+      <span class="nav"><span class="now">04</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Three deliverables, three <em>verbatim</em> requirements.</h2>
+      <div class="reqs">
+        <div class="req anim anim-2">
+          <span class="ix">i.</span>
+          <h3 class="what">Implement primitives <em>from scratch</em> on the GPU.</h3>
+          <p class="body-txt">
+            No calls to <b>libsodium</b> or NVIDIA cryptolibs.
+            We hand-wrote the AES-128 kernel (S-box, T-tables, fixed-key) and
+            Spongent-π[176] kernel in <b>PyCUDA</b>.
+          </p>
+          <span class="check">aes_kernel.cu · spongent_kernel.cu</span>
+        </div>
+        <div class="req anim anim-3">
+          <span class="ix">ii.</span>
+          <h3 class="what">Benchmark against <em>CPU equivalents</em>.</h3>
+          <p class="body-txt">
+            We ship three CPU implementations as ground truth:
+            single-threaded ANSI C reference, <b>Intel AES-NI</b> intrinsics,
+            and <b>OpenMP</b> for thread-level parallelism.
+          </p>
+          <span class="check">libggmcpu.so · ctypes binding</span>
+        </div>
+        <div class="req anim anim-4">
+          <span class="ix">iii.</span>
+          <h3 class="what">Analyse <em>performance–security</em> trade-offs.</h3>
+          <p class="body-txt">
+            T-tables are fast but introduce <b>cache-bank timing</b>. Bitslicing
+            is constant-time but expensive. Spongent has bit-level rounds
+            (no cache leak) but is <b>25× slower</b> on GPU.
+          </p>
+          <span class="check">slide 15 trade-offs</span>
+        </div>
+      </div>
+      <div class="footnote">
+        <span>plus: full tree expansion for varying seeds and depths · memory layout · PRF parallelization</span>
+        <span>scroll →</span>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">ECE 268 · final project description</span>
+      <span>scroll →</span>
+    </footer>
   </section>
 
-</div>
-<div class="footer">scroll → / arrow keys / space</div>
+  <!-- ============ 05 · AES-128 DEEP DIVE ============ -->
+  <section class="slide prim-deep aes" data-i="5">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">04</span><span>PRG-1 · inside AES-128</span></span>
+      <span class="nav"><span class="now">05</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        AES-128: ten rounds on a <em>4×4 byte grid</em>.
+      </h2>
+      <div class="stage anim anim-2">
+        <div class="meta">
+          <span>operation · <span class="phase" id="aes-phase">SubBytes</span></span>
+          <span>round <span class="round" id="aes-round">01</span> / 10</span>
+        </div>
+        <div class="grid-wrap"><div class="aes-state" id="aes-state"></div></div>
+      </div>
+      <div class="right anim anim-3">
+        <p class="pitch">
+          AES treats its 128-bit state as a <b>4×4 grid of bytes</b>. Each round mutates
+          the grid with four primitives, ending with a key XOR. The
+          <b>10th round skips MixColumns</b>. Standardized by NIST in 2001 (FIPS-197);
+          shipped in silicon by Intel since Westmere (2010).
+        </p>
+        <div class="ops">
+          <div class="op"><span class="n">i.</span><span class="desc"><b>SubBytes</b> — apply 256-byte S-box to each cell<span class="mono-tag">non-linear</span></span></div>
+          <div class="op"><span class="n">ii.</span><span class="desc"><b>ShiftRows</b> — rotate rows by 0, 1, 2, 3 bytes<span class="mono-tag">diffusion</span></span></div>
+          <div class="op"><span class="n">iii.</span><span class="desc"><b>MixColumns</b> — mix each column in GF(2<sup>8</sup>)<span class="mono-tag">diffusion</span></span></div>
+          <div class="op"><span class="n">iv.</span><span class="desc"><b>AddRoundKey</b> — XOR with the 128-bit round key<span class="mono-tag">key mixing</span></span></div>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><span class="l">block</span><span class="v">128</span></div>
+          <div class="stat"><span class="l">rounds</span><span class="v">10</span></div>
+          <div class="stat"><span class="l">silicon</span><span class="v">AES-NI</span></div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">FIPS-197 · Joan Daemen &amp; Vincent Rijmen, 1998</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 06 · AES KERNEL VARIANTS ============ -->
+  <section class="slide slide-kvar" data-i="6">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">05</span><span>How we implemented AES on the GPU</span></span>
+      <span class="nav"><span class="now">06</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        Three kernel variants, three different <em>trade-offs</em>.
+      </h2>
+      <div class="grid">
+        <div class="cell anim anim-2">
+          <span class="tag">v1 · simple</span>
+          <h3 class="name"><em>S-box</em> in __constant__</h3>
+          <p class="where">256-byte S-box · <b>broadcast cache</b></p>
+          <div class="mini" data-kviz="sbox">
+            <div class="mt">256-byte lookup</div>
+            <svg id="kv-sbox" viewBox="0 0 320 60" preserveAspectRatio="none"></svg>
+          </div>
+          <p class="pitch">
+            Round keys live in <b>per-thread registers</b>; the S-box is uploaded once into
+            <b>__constant__ memory</b>. Each round costs 9 SubBytes loads + 4 MixColumns
+            multiplications. Simple, correct, slow.
+          </p>
+          <div class="perf">
+            <span class="l">throughput @ d=20</span>
+            <span class="v">30M/s</span>
+          </div>
+          <span class="sec">timing: constant if S-box index uniform</span>
+        </div>
+        <div class="cell anim anim-3">
+          <span class="tag">v2 · fast</span>
+          <h3 class="name"><em>T-tables</em> in __shared__</h3>
+          <p class="where">4 × 256 × 4 B · <b>4 KB per block</b></p>
+          <div class="mini" data-kviz="ttable">
+            <div class="mt">4 tables × 256 × 4 B</div>
+            <svg id="kv-ttable" viewBox="0 0 320 60" preserveAspectRatio="none"></svg>
+          </div>
+          <p class="pitch">
+            Precomputed <b>T<sub>0</sub>..T<sub>3</sub></b> tables collapse SubBytes +
+            ShiftRows + MixColumns into <b>four 32-bit XORs</b> per round.
+            ~1.7× faster than S-box. Loaded into <b>shared memory</b> per block at kernel entry.
+          </p>
+          <div class="perf">
+            <span class="l">throughput @ d=20</span>
+            <span class="v">50M/s</span>
+          </div>
+          <span class="sec">timing: depends on plaintext bytes</span>
+        </div>
+        <div class="cell constant anim anim-4">
+          <span class="tag">v3 · constant-time</span>
+          <h3 class="name"><em>bitsliced</em> · 32-wide</h3>
+          <p class="where">warp-level SIMD · <b>32 blocks/warp</b></p>
+          <div class="mini" data-kviz="bitslice">
+            <div class="mt">32 lanes across a warp</div>
+            <svg id="kv-bitslice" viewBox="0 0 320 60" preserveAspectRatio="none"></svg>
+          </div>
+          <p class="pitch">
+            Käsper–Schwabe bitslicing: pack 32 AES states <b>across a warp</b>; each round
+            becomes a few hundred Boolean ops. <b>Constant-time</b> by construction.
+            Implementation is heavy; time-boxed (currently falls back to T-tables).
+          </p>
+          <div class="perf">
+            <span class="l">target throughput</span>
+            <span class="v">~80M/s</span>
+          </div>
+          <span class="sec">timing: cipher-independent</span>
+        </div>
+      </div>
+      <p class="footnote">
+        <b>Engineering rule of thumb:</b> for GPU AES, prefer <b>T-tables for throughput</b>
+        and <b>bitsliced for any setting where the input is attacker-controlled</b>.
+      </p>
+    </div>
+    <footer class="foot">
+      <span class="sig">Käsper &amp; Schwabe · CHES 2009 · "Faster &amp; Timing-Attack Resistant AES-GCM"</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 07 · SPONGENT DEEP DIVE ============ -->
+  <section class="slide prim-deep spongent" data-i="7">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">06</span><span>PRG-2 · inside Spongent-π[176]</span></span>
+      <span class="nav"><span class="now">07</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        Spongent: <em>80 rounds</em> on a 176-bit state.
+      </h2>
+      <div class="stage anim anim-2">
+        <div class="meta">
+          <span>operation · <span class="phase" id="sp-phase">AddCounter</span></span>
+          <span>round <span class="round" id="sp-round">01</span> / 80</span>
+        </div>
+        <div class="grid-wrap"><div class="sp-state" id="sp-state"></div></div>
+      </div>
+      <div class="right anim anim-3">
+        <p class="pitch">
+          A <b>PRESENT-style permutation</b> at width 176. Designed for
+          <b>ASIC area</b>, not throughput — Spongent's whole appeal is fitting into
+          ~1 000 GE of silicon. Every operation works on individual bits.
+        </p>
+        <div class="ops">
+          <div class="op"><span class="n">i.</span><span class="desc"><b>AddCounter</b> — XOR a 7-bit lFSR at <b>both ends</b> of state<span class="mono-tag">round constant</span></span></div>
+          <div class="op"><span class="n">ii.</span><span class="desc"><b>S-box layer</b> — PRESENT 4-bit S-box on each nibble<span class="mono-tag">non-linear</span></span></div>
+          <div class="op"><span class="n">iii.</span><span class="desc"><b>pLayer</b> — bit permutation <span class="mono-tag" style="color:var(--lime); text-transform:none; font-size:11px; letter-spacing:.03em">j → (j·44) mod 175</span></span></div>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><span class="l">state</span><span class="v">176</span></div>
+          <div class="stat"><span class="l">rounds</span><span class="v">80</span></div>
+          <div class="stat"><span class="l">silicon</span><span class="v">none</span></div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">Bogdanov · Knežević · Leander · Toz · Varıcı · Verbauwhede · CHES 2011</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 08 · COMPARISON ============ -->
+  <section class="slide slide-cmp" data-i="8">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">07</span><span>Two PRGs, side by side</span></span>
+      <span class="nav"><span class="now">08</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Same job, <em>opposite</em> design.</h2>
+      <div class="compare">
+        <div class="col l anim anim-2">
+          <h3 class="name">AES-128</h3>
+          <div class="sub">block cipher · hardware-accelerated</div>
+          <dl>
+            <dt>state</dt>     <dd>128-bit grid of <b>16 bytes</b></dd>
+            <dt>granularity</dt><dd><b>byte</b>-level ops</dd>
+            <dt>rounds</dt>    <dd><b>10</b></dd>
+            <dt>per round</dt> <dd>S-box · ShiftRows · MixColumns · ⊕key</dd>
+            <dt>CPU</dt>       <dd>has <b>AES-NI</b> intrinsics</dd>
+            <dt>GPU map</dt>   <dd>round keys in registers · S-box in <b>const</b></dd>
+          </dl>
+          <p class="verdict">Built for software speed.</p>
+        </div>
+        <div class="vs anim anim-3">
+          <span class="label">vs.</span>
+          <span class="x">×</span>
+        </div>
+        <div class="col r anim anim-4">
+          <h3 class="name">Spongent π[176]</h3>
+          <div class="sub">permutation · lightweight target</div>
+          <dl>
+            <dt>state</dt>     <dd>176-bit · <b>22 bytes</b></dd>
+            <dt>granularity</dt><dd><b>bit</b>-level ops</dd>
+            <dt>rounds</dt>    <dd><b>80</b></dd>
+            <dt>per round</dt> <dd>⊕counter · 4-bit S-box · bit permutation</dd>
+            <dt>CPU</dt>       <dd><b>no</b> hardware support</dd>
+            <dt>GPU map</dt>   <dd>state in 3×uint64 · pLayer in <b>const</b></dd>
+          </dl>
+          <p class="verdict">Built for hardware area.</p>
+        </div>
+      </div>
+      <div class="gap-line anim anim-5">
+        Spongent does <span class="big">~8×</span> more rounds per call, each on individual bits — and pays for it.
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">why we'd expect AES to win in software · we'll measure it</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 09 · ARCHITECTURE STACK ============ -->
+  <section class="slide slide-arch" data-i="9">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">08</span><span>Implementation · stack</span></span>
+      <span class="nav"><span class="now">09</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">A thin <em>Python</em> harness on top of native code.</h2>
+      <div class="stack">
+        <div class="col cpu anim anim-2"><div class="col-head">CPU side · libggmcpu.so</div></div>
+        <div class="col gpu anim anim-2"><div class="col-head">GPU side · PyCUDA SourceModule</div></div>
+
+        <div class="layer anim anim-3">
+          <span class="name"><b>aes_ref.c</b> · aes_ni.c · aes_omp.c</span>
+          <span class="tag">C / intrinsics</span>
+          <span class="files">FIPS-197 reference · _mm_aesenc intrinsics · #pragma omp parallel for</span>
+        </div>
+        <div class="layer anim anim-3">
+          <span class="name"><b>aes_kernel.cu</b> · aes_kernel_fixedkey.cu</span>
+          <span class="tag">CUDA C</span>
+          <span class="files">__constant__ SBOX · __shared__ T-tables · per-level expand</span>
+        </div>
+
+        <div class="layer anim anim-4">
+          <span class="name"><b>spongent_ref.c</b> · spongent_omp.c</span>
+          <span class="tag">C / OpenMP</span>
+          <span class="files">π[176] from spec · 80 rounds · OMP per-level wrapper</span>
+        </div>
+        <div class="layer anim anim-4">
+          <span class="name"><b>spongent_kernel.cu</b></span>
+          <span class="tag">CUDA C</span>
+          <span class="files">__constant__ S-box · pLayer lookup · 80 unrolled rounds</span>
+        </div>
+
+        <div class="layer anim anim-5">
+          <span class="name">Makefile → <b>libggmcpu.so</b></span>
+          <span class="tag">build</span>
+          <span class="files">gcc -O3 -march=native · -maes -msse4.1 · -fopenmp</span>
+        </div>
+        <div class="layer anim anim-5">
+          <span class="name">Python → <b>pycuda.compiler.SourceModule</b></span>
+          <span class="tag">JIT</span>
+          <span class="files">nvcc -O3 -arch=sm_86 · LRU-cached · constant uploads</span>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">tree.py public API · ctypes_iface.py · host.py</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 10 · CPU BASELINES ============ -->
+  <section class="slide slide-cpu" data-i="10">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">09</span><span>CPU baselines</span></span>
+      <span class="nav"><span class="now">10</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Three ground-truth <em>CPU</em> backends.</h2>
+      <div class="cards">
+        <div class="card anim anim-2">
+          <span class="tag">v1</span>
+          <h3 class="name"><em>S-box</em> reference</h3>
+          <span class="codetag">cpu_1t</span>
+          <div class="thr" data-threads="1" data-style="single">
+            <span class="label-l">1 thread</span>
+          </div>
+          <p class="desc">
+            Direct FIPS-197 implementation: byte-by-byte ShiftRows,
+            xtime-based MixColumns, no SIMD. <b>Single thread</b>.
+            This is the bit-exact <b>oracle</b> every other backend matches against.
+          </p>
+          <div class="perf">
+            <span class="l">@ d=20 · leaves/s</span>
+            <span class="v">1.5M</span>
+          </div>
+        </div>
+        <div class="card anim anim-3">
+          <span class="tag">v2 · hardware</span>
+          <h3 class="name"><em>AES-NI</em> intrinsics</h3>
+          <span class="codetag">cpu_aesni</span>
+          <div class="thr" data-threads="1" data-style="aesni">
+            <span class="label-l">1 thread + silicon</span>
+          </div>
+          <p class="desc">
+            <b>_mm_aeskeygenassist_si128</b> for the schedule,
+            <b>_mm_aesenc_si128</b> for the inner rounds,
+            <b>_mm_aesenclast_si128</b> for the last. Single instruction = one whole round.
+            Still single-thread — and still beats CPU OpenMP at high depth.
+          </p>
+          <div class="perf">
+            <span class="l">@ d=20 · leaves/s</span>
+            <span class="v">8M</span>
+          </div>
+        </div>
+        <div class="card anim anim-4">
+          <span class="tag">v3 · multicore</span>
+          <h3 class="name"><em>OpenMP</em> wrapper</h3>
+          <span class="codetag">cpu_omp · t=1,2,4,8,16</span>
+          <div class="thr" data-threads="8" data-style="omp">
+            <span class="label-l">8 threads</span>
+          </div>
+          <p class="desc">
+            One <b>#pragma omp parallel for</b> at each level loop; static schedule;
+            uses the same S-box reference per thread. Scales <b>well to 8 threads</b>
+            on this 8-core box, then collapses at <b>t=16</b> from oversubscription.
+          </p>
+          <div class="perf">
+            <span class="l">@ d=20 · t=8 · leaves/s</span>
+            <span class="v">5M</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">Ryzen 7 5700U · 8 logical cores · gcc 15.2 · -O3 -march=native</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 11 · PARALLELISM ============ -->
+  <section class="slide slide-par" data-i="11">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">10</span><span>GPU parallelization strategy</span></span>
+      <span class="nav"><span class="now">11</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        At depth <em>ℓ</em>, launch <em>2<sup>ℓ</sup></em> threads — one per parent.
+      </h2>
+      <div class="stage anim anim-2">
+        <div class="tag-tl"><span>depth ℓ</span><span class="v" id="par-depth">0</span></div>
+        <div class="tag-br"><span>threads in flight</span><span class="v" id="par-threads">1</span></div>
+        <canvas id="par-canvas"></canvas>
+      </div>
+      <div class="right anim anim-3">
+        <div class="scale" id="par-scale">1<span class="small">parallel threads</span></div>
+        <div class="slider-wrap">
+          <div class="lbl"><span>scrub depth</span><span class="num" id="par-slider-val">0</span></div>
+          <input type="range" id="par-slider" min="0" max="20" step="1" value="0">
+          <div class="ticks"><span>0</span><span>5</span><span>10</span><span>15</span><span>20</span></div>
+        </div>
+        <pre class="pseudocode" aria-label="per-level launch pseudocode">
+<span class="k">for</span> ℓ <span class="k">in</span> 0..d−1:
+  <span class="c">// 2^ℓ parents waiting at this level</span>
+  n     = <span class="v">1 &lt;&lt; ℓ</span>
+  block = <span class="v">min(256, n)</span>
+  grid  = <span class="v">⌈n / block⌉</span>
+  kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(tree, ℓ)
+        </pre>
+      </div>
+      <p class="key-insight anim anim-4">
+        Each thread reads <b>one parent</b>, computes G, writes <b>two children</b>.
+        At d = 20 that is <b>~1 M independent threads</b> per launch.
+      </p>
+    </div>
+    <footer class="foot">
+      <span class="sig">NVIDIA Ampere · 28 SMs · 3 584 CUDA cores · drag the slider →</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 12 · MEMORY HIERARCHY ============ -->
+  <section class="slide slide-mem" data-i="12">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">11</span><span>GPU memory layout</span></span>
+      <span class="nav"><span class="now">12</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Every byte lives <em>where it should</em>.</h2>
+      <div class="pyramid">
+        <div class="layer anim anim-2" data-mempct="9">
+          <span class="tier">tier 1 · fastest</span>
+          <h3 class="where">registers</h3>
+          <span class="scope">per-thread · ≈100 cycles latency saved</span>
+          <p class="what">
+            <b>AES round keys</b> (176 B/thread, variable-key); <b>Spongent state</b>
+            (3 × uint64). Recomputed for each parent → cheap and contention-free.
+          </p>
+          <span class="sz">~250 B/thread</span>
+          <div class="mem-bar"><div class="fill"></div></div>
+        </div>
+        <div class="layer anim anim-3" data-mempct="42">
+          <span class="tier">tier 2 · per-block</span>
+          <h3 class="where">__shared__</h3>
+          <span class="scope">256-thread block · same-clock access</span>
+          <p class="what">
+            <b>AES T-tables</b> — 4 × 256 × 4 B = 4 KB, loaded once at kernel entry.
+            Avoids the broadcast-serialization issue of __constant__ on
+            <b>plaintext-dependent</b> indices.
+          </p>
+          <span class="sz">4 KB</span>
+          <div class="mem-bar"><div class="fill"></div></div>
+        </div>
+        <div class="layer anim anim-4" data-mempct="22">
+          <span class="tier">tier 3 · uniform reads</span>
+          <h3 class="where">__constant__</h3>
+          <span class="scope">all threads broadcast read</span>
+          <p class="what">
+            <b>S-boxes</b> (AES 256 B, Spongent 16 B), AES <b>Rcon</b> (11 B),
+            <b>pLayer table</b> (176 B), fixed-key round-key schedule
+            (176 B). Always tiny.
+          </p>
+          <span class="sz">≈ 800 B</span>
+          <div class="mem-bar"><div class="fill"></div></div>
+        </div>
+        <div class="layer anim anim-5" data-mempct="100">
+          <span class="tier">tier 4 · the tree</span>
+          <h3 class="where">global</h3>
+          <span class="scope">all threads · BFS array</span>
+          <p class="what">
+            <b>Flat array of nodes</b>: parent at <b>i</b>, children at <b>2i+1, 2i+2</b>.
+            Coalesced 32-thread reads (32 × 16 B = 512 B). At d=24, 512 MB.
+          </p>
+          <span class="sz">up to 512 MB</span>
+          <div class="mem-bar"><div class="fill"></div></div>
+        </div>
+      </div>
+      <p class="key">
+        Every <b>__constant__</b> upload is done once at module-load time and reused for the whole sweep.
+        The <b>global</b> tree buffer is allocated per depth with <b>cuMemAlloc</b>.
+      </p>
+    </div>
+    <footer class="foot">
+      <span class="sig">RTX 3060 · 12 GB · 360 GB/s HBM · 7 MB L2</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 13 · VERIFICATION ============ -->
+  <section class="slide slide-ver" data-i="13">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">12</span><span>Verification · KAT-driven</span></span>
+      <span class="nav"><span class="now">13</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        Every backend is <em>bit-exact</em> against the same oracle.
+      </h2>
+      <div class="left">
+        <p class="anim anim-2 pull">35 / 35
+          <span class="small">pytest cells pass on RTX 3060</span>
+        </p>
+        <p class="lead anim anim-3">
+          The single-thread <b>S-box reference</b> is the source of truth. Every
+          other backend — AES-NI, OpenMP, GPU S-box / T-tables / fixed-key,
+          Spongent CPU + GPU — must match it byte-for-byte for randomly seeded
+          trees at d ∈ {4, 8, 12, 16}.
+        </p>
+        <p class="lead anim anim-3">
+          The FIPS-197 single-block KAT pins AES; a frozen d=4 GGM tree pins the
+          construction; Spongent has its own CHES test vector and a frozen tree.
+        </p>
+      </div>
+      <div class="right anim anim-4">
+        <div class="h">tests/ — pytest summary</div>
+        <div class="runner-bar">
+          <span>running</span>
+          <span class="progress"><span class="fill" id="ver-fill"></span></span>
+          <span class="pct" id="ver-pct">0/35</span>
+        </div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_aes_kat.py · FIPS-197</span><span class="count">3/3</span></div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_tree_indexing.py</span><span class="count">3/3</span></div>
+        <div class="test" data-count="5"><span class="check"></span><span class="name">test_ggm_consistency.py · CPU AES</span><span class="count">5/5</span></div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_ggm_consistency.py · CPU AES-NI</span><span class="count">3/3</span></div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_ggm_consistency.py · CPU OpenMP</span><span class="count">3/3</span></div>
+        <div class="test" data-count="4"><span class="check"></span><span class="name">test_ggm_consistency.py · CPU Spongent</span><span class="count">4/4</span></div>
+        <div class="test" data-count="4"><span class="check"></span><span class="name">test_ggm_consistency.py · GPU AES S-box</span><span class="count">4/4</span></div>
+        <div class="test" data-count="4"><span class="check"></span><span class="name">test_ggm_consistency.py · GPU AES T-tables</span><span class="count">4/4</span></div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_ggm_consistency.py · GPU AES fixed-key</span><span class="count">3/3</span></div>
+        <div class="test" data-count="3"><span class="check"></span><span class="name">test_ggm_consistency.py · GPU path-eval</span><span class="count">3/3</span></div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">pytest -q · 0 failures · ruff + black clean</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 14 · BENCHMARK ============ -->
+  <section class="slide slide-bench" data-i="14">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">13</span><span>Measured throughput · AES · d = 20</span></span>
+      <span class="nav"><span class="now">14</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">
+        GPU T-tables is <em>6×</em> faster than CPU AES-NI.
+      </h2>
+      <div class="chart anim anim-2" id="bench-chart"></div>
+      <div class="footnote anim anim-3">
+        <span class="big">all backends <b>bit-exact</b> against the d=4 KAT · <b>35/35</b> tests</span>
+        <span>median over 30 runs · 5 warmup · single RTX 3060</span>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">vast.ai RTX 3060 · Ryzen 7 5700U · CUDA 13 · gcc 15.2</span>
+      <span>hover bars · scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 15 · TRADE-OFFS ============ -->
+  <section class="slide slide-trade" data-i="15">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">14</span><span>Performance vs security</span></span>
+      <span class="nav"><span class="now">15</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Faster kernels leak more <em>timing</em>.</h2>
+      <div class="grid">
+        <div class="cell anim anim-2">
+          <span class="tag">AES kernel choice</span>
+          <h3 class="title">S-box · <em>T-tables</em> · bitsliced</h3>
+          <p class="body-txt">
+            T-tables push 4 KB of round tables into <b>shared memory</b> and
+            replace nine S-box loads with four XORs — fast, but introduces
+            <b>cache-bank timing</b> dependent on plaintext.
+            Bitslicing is constant-time by construction.
+          </p>
+          <div class="minibar">
+            <div class="row"><span>S-box</span><span class="bar-wrap"><span class="bar" data-pct="55" style="--mbcolor:var(--ember)"></span></span><span class="v">30M</span></div>
+            <div class="row"><span>T-tables</span><span class="bar-wrap"><span class="bar" data-pct="92" style="--mbcolor:var(--ember)"></span></span><span class="v">50M</span></div>
+            <div class="row"><span>fixed-key</span><span class="bar-wrap"><span class="bar" data-pct="55" style="--mbcolor:var(--ember)"></span></span><span class="v">30M</span></div>
+          </div>
+          <span class="meas">all variants bit-exact · leaves/s @ d=20</span>
+        </div>
+        <div class="cell anim anim-3">
+          <span class="tag">lightweight ≠ fast</span>
+          <h3 class="title">Spongent's <em>area-first</em> design loses on commodity GPUs</h3>
+          <p class="body-txt">
+            Spongent's 80 bit-level rounds are great for <b>chip area</b> in
+            sensors and RFID tags — but byte-level AES with hardware support
+            wins by <b>25×</b> on commodity silicon. <b>"Lightweight" is a
+            hardware-engineer's word.</b>
+          </p>
+          <div class="minibar">
+            <div class="row"><span>AES GPU</span><span class="bar-wrap"><span class="bar" data-pct="100" style="--mbcolor:var(--lime)"></span></span><span class="v">50M</span></div>
+            <div class="row"><span>Spongent GPU</span><span class="bar-wrap"><span class="bar" data-pct="4"  style="--mbcolor:var(--lime)"></span></span><span class="v">2M</span></div>
+            <div class="row"><span>Spongent CPU·8t</span><span class="bar-wrap"><span class="bar" data-pct="0.15" style="--mbcolor:var(--lime)"></span></span><span class="v">75K</span></div>
+          </div>
+          <span class="meas">side-channel: bit-level ops avoid cache leaks</span>
+        </div>
+        <div class="cell anim anim-4">
+          <span class="tag">when CPU wins</span>
+          <h3 class="title">Below the <em>crossover</em>, launch overhead dominates</h3>
+          <p class="body-txt">
+            For <b>d ≲ 10</b> (under 1k leaves) CPU AES-NI matches or beats
+            the GPU because kernel launch ≈ 20 μs swamps the work.
+            <b>OpenMP collapses at t = 16</b> on this 8-core box — a clean
+            oversubscription lesson.
+          </p>
+          <div class="minibar">
+            <div class="row"><span>CPU 1t @ d=8</span><span class="bar-wrap"><span class="bar" data-pct="62" style="--mbcolor:var(--violet)"></span></span><span class="v">0.85M</span></div>
+            <div class="row"><span>GPU @ d=8</span><span class="bar-wrap"><span class="bar" data-pct="40" style="--mbcolor:var(--violet)"></span></span><span class="v">0.55M</span></div>
+            <div class="row"><span>cross @ d=10</span><span class="bar-wrap"><span class="bar" data-pct="100" style="--mbcolor:var(--violet)"></span></span><span class="v">tie</span></div>
+          </div>
+          <span class="meas">measured per-level kernel overhead</span>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">course requirement: discuss performance–security trade-offs</span>
+      <span>scroll →</span>
+    </footer>
+  </section>
+
+  <!-- ============ 16 · TAKE-AWAY ============ -->
+  <section class="slide slide-end" data-i="16">
+    <header class="head">
+      <span class="eyebrow"><span class="ix">15</span><span>Take-away &amp; future work</span></span>
+      <span class="nav"><span class="now">16</span> / 16</span>
+    </header>
+    <div class="body">
+      <h2 class="headline anim anim-1">Three <em>findings</em>, three <em>open ends</em>.</h2>
+      <div class="insights">
+        <div class="insight anim anim-2">
+          <span class="ix">i.</span>
+          <div class="viz">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid meet">
+              <circle cx="20" cy="50" r="6" fill="var(--ember)"/>
+              <line x1="26" y1="50" x2="60" y2="20" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <line x1="26" y1="50" x2="60" y2="80" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <circle cx="60" cy="20" r="4" fill="var(--ink)"/><circle cx="60" cy="80" r="4" fill="var(--ink)"/>
+              <line x1="64" y1="20" x2="100" y2="10" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <line x1="64" y1="20" x2="100" y2="30" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <line x1="64" y1="80" x2="100" y2="70" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <line x1="64" y1="80" x2="100" y2="90" stroke="var(--ink-mute)" stroke-width="1.5"/>
+              <g fill="var(--lime)">
+                <rect x="130" y="6" width="6" height="6"/><rect x="142" y="6" width="6" height="6"/><rect x="154" y="6" width="6" height="6"/><rect x="166" y="6" width="6" height="6"/><rect x="178" y="6" width="6" height="6"/>
+                <rect x="130" y="18" width="6" height="6"/><rect x="142" y="18" width="6" height="6"/><rect x="154" y="18" width="6" height="6"/><rect x="166" y="18" width="6" height="6"/><rect x="178" y="18" width="6" height="6"/>
+                <rect x="130" y="30" width="6" height="6"/><rect x="142" y="30" width="6" height="6"/><rect x="154" y="30" width="6" height="6"/><rect x="166" y="30" width="6" height="6"/><rect x="178" y="30" width="6" height="6"/>
+                <rect x="130" y="42" width="6" height="6"/><rect x="142" y="42" width="6" height="6"/><rect x="154" y="42" width="6" height="6"/><rect x="166" y="42" width="6" height="6"/><rect x="178" y="42" width="6" height="6"/>
+                <rect x="130" y="54" width="6" height="6"/><rect x="142" y="54" width="6" height="6"/><rect x="154" y="54" width="6" height="6"/><rect x="166" y="54" width="6" height="6"/><rect x="178" y="54" width="6" height="6"/>
+                <rect x="130" y="66" width="6" height="6"/><rect x="142" y="66" width="6" height="6"/><rect x="154" y="66" width="6" height="6"/><rect x="166" y="66" width="6" height="6"/><rect x="178" y="66" width="6" height="6"/>
+                <rect x="130" y="78" width="6" height="6"/><rect x="142" y="78" width="6" height="6"/><rect x="154" y="78" width="6" height="6"/><rect x="166" y="78" width="6" height="6"/><rect x="178" y="78" width="6" height="6"/>
+              </g>
+            </svg>
+          </div>
+          <p class="txt">The tree maps cleanly onto <em>per-level GPU kernels</em>.</p>
+          <span class="meas">found · GPU T-tables = 50M leaves/s @ d=20</span>
+          <p class="txt" style="margin-top:auto; font-size: clamp(13px, 1.5vw, 16px); color:var(--ink-dim); font-style:italic;">
+            Open: <em>subtree-per-block</em> kernels could reduce launch overhead at small d.
+          </p>
+        </div>
+        <div class="insight anim anim-3">
+          <span class="ix">ii.</span>
+          <div class="viz">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid meet">
+              <text x="0" y="20" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">AES</text>
+              <rect x="40" y="14" width="155" height="12" fill="var(--ember)"/>
+              <text x="0" y="58" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">SPONGENT</text>
+              <rect x="40" y="52" width="6" height="12" fill="var(--lime)"/>
+              <text x="50" y="62" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">25× slower</text>
+              <line x1="40" y1="78" x2="195" y2="78" stroke="var(--rule)" stroke-width="1"/>
+              <text x="40" y="93" font-family="JetBrains Mono" font-size="8" fill="var(--ink-mute)">0</text>
+              <text x="160" y="93" font-family="JetBrains Mono" font-size="8" fill="var(--ink-mute)">leaves/s</text>
+            </svg>
+          </div>
+          <p class="txt">Lightweight crypto is <em>not</em> always fast on commodity GPUs.</p>
+          <span class="meas">found · AES 50M vs Spongent 2M leaves/s</span>
+          <p class="txt" style="margin-top:auto; font-size: clamp(13px, 1.5vw, 16px); color:var(--ink-dim); font-style:italic;">
+            Open: <em>bit-sliced Spongent</em> across a warp could close the gap.
+          </p>
+        </div>
+        <div class="insight anim anim-4">
+          <span class="ix">iii.</span>
+          <div class="viz">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid meet">
+              <line x1="20" y1="80" x2="180" y2="80" stroke="var(--rule)" stroke-width="1"/>
+              <line x1="20" y1="10" x2="20" y2="80" stroke="var(--rule)" stroke-width="1"/>
+              <polyline points="20,60 60,55 100,52 140,50 180,49" fill="none" stroke="var(--ember)" stroke-width="2"/>
+              <polyline points="20,75 60,68 100,40 140,20 180,12" fill="none" stroke="var(--lime)" stroke-width="2"/>
+              <circle cx="92" cy="48" r="4" fill="var(--ink)"/>
+              <text x="96" y="46" font-family="JetBrains Mono" font-size="8" fill="var(--ink-dim)">cross @ d≈10</text>
+              <text x="180" y="48" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="var(--ember)">CPU</text>
+              <text x="180" y="20" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="var(--lime)">GPU</text>
+              <text x="20" y="95" font-family="JetBrains Mono" font-size="8" fill="var(--ink-mute)">d=4</text>
+              <text x="180" y="95" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="var(--ink-mute)">d=20</text>
+            </svg>
+          </div>
+          <p class="txt">Faster kernels leak more <em>timing</em> — choose carefully.</p>
+          <span class="meas">found · T-tables ⊃ bank-pattern side channel</span>
+          <p class="txt" style="margin-top:auto; font-size: clamp(13px, 1.5vw, 16px); color:var(--ink-dim); font-style:italic;">
+            Open: ship <em>warp-level bitsliced AES</em> for constant-time GGM.
+          </p>
+        </div>
+      </div>
+      <div class="repo anim anim-5">
+        <span>github · UCSD ECE 268 · Spring 2026</span>
+        <span class="url">github.com / &lt;you&gt; / ggm-tree</span>
+      </div>
+    </div>
+    <footer class="foot">
+      <span class="sig">thank you · questions welcome</span>
+      <span>END · 16 / 16</span>
+    </footer>
+  </section>
+
+</main>
+
+<div class="hint"><kbd>←</kbd><kbd>→</kbd> navigate &nbsp;·&nbsp; <kbd>space</kbd> next</div>
+
 <script>
-  document.addEventListener("keydown", (e) => {
-    const w = window.innerWidth;
-    if (e.key === "ArrowRight" || e.key === " ") document.scrollingElement.scrollBy({left:w, behavior:"smooth"});
-    if (e.key === "ArrowLeft") document.scrollingElement.scrollBy({left:-w, behavior:"smooth"});
+(() => {
+  const deck = document.getElementById('deck');
+  const bar  = document.getElementById('bar');
+  const slides = [...document.querySelectorAll('.slide')];
+
+  let activeIdx = -1;
+  const setActive = (i) => {
+    if (i === activeIdx) return;
+    slides.forEach(s => s.classList.remove('active'));
+    slides[i].classList.add('active');
+    activeIdx = i;
+    onSlideEnter(i);
+  };
+  const onScroll = () => {
+    const w = deck.clientWidth;
+    const idx = Math.round(deck.scrollLeft / w);
+    const pct = Math.min(100, (deck.scrollLeft / Math.max(1, deck.scrollWidth - w)) * 100);
+    bar.style.width = pct + '%';
+    if (slides[idx]) setActive(idx);
+  };
+  deck.addEventListener('scroll', onScroll, { passive: true });
+  const advance = (dir) => deck.scrollBy({ left: dir * deck.clientWidth, behavior: 'smooth' });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); advance(+1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); advance(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); deck.scrollTo({left: 0, behavior:'smooth'}); }
+    else if (e.key === 'End')  { e.preventDefault(); deck.scrollTo({left: deck.scrollWidth, behavior:'smooth'}); }
   });
+  let tx = 0;
+  deck.addEventListener('touchstart', e => tx = e.touches[0].clientX, { passive: true });
+  deck.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 60) advance(dx < 0 ? +1 : -1);
+  });
+  const hint = document.querySelector('.hint');
+  setTimeout(() => { if (hint) { hint.style.transition = 'opacity 1s'; hint.style.opacity = '0'; } }, 6000);
+
+  /* Force CSS .anim entrance to replay every slide re-enter */
+  const replayEntranceAnim = (slide) => {
+    slide.querySelectorAll('.anim').forEach(el => { el.style.animation = 'none'; });
+    void slide.offsetWidth;
+    slide.querySelectorAll('.anim').forEach(el => { el.style.animation = ''; });
+  };
+
+  /* ====== TREE GROWTH (slide 3) ====== */
+  const treeSvg = document.getElementById('tree-svg');
+  const treeDepthEl = document.getElementById('tree-depth');
+  const treeLeavesEl = document.getElementById('tree-leaves');
+  const TREE_DEPTH = 5;
+  const HIGHLIGHT_PATH = [0, 1, 1, 0, 0];
+  let treeCounterTimer = null;
+  const buildTree = () => {
+    if (treeCounterTimer) { clearTimeout(treeCounterTimer); treeCounterTimer = null; }
+    while (treeSvg.firstChild) treeSvg.removeChild(treeSvg.firstChild);
+    treeSvg.classList.remove('tree-anim'); void treeSvg.offsetWidth;
+    const W = 1200, H = 540, padX = 80, topY = 40, bottomY = H - 30;
+    const levelGap = (bottomY - topY) / TREE_DEPTH;
+    const nodes = [];
+    for (let d = 0; d <= TREE_DEPTH; d++) {
+      const count = 1 << d; const row = [];
+      for (let i = 0; i < count; i++) {
+        const x = padX + (count === 1 ? (W - padX*2)/2 : (i + 0.5) * (W - padX*2) / count);
+        const y = topY + d * levelGap;
+        row.push({ x, y, hi: false });
+      }
+      nodes.push(row);
+    }
+    let hiIdx = 0; nodes[0][0].hi = true;
+    for (let d = 0; d < TREE_DEPTH; d++) {
+      hiIdx = hiIdx * 2 + HIGHLIGHT_PATH[d];
+      nodes[d+1][hiIdx].hi = true;
+    }
+    for (let d = 0; d < TREE_DEPTH; d++) for (let i = 0; i < (1 << d); i++) {
+      const p = nodes[d][i];
+      for (let c = 0; c < 2; c++) {
+        const ch = nodes[d+1][i*2 + c];
+        const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        ln.setAttribute('x1', p.x); ln.setAttribute('y1', p.y);
+        ln.setAttribute('x2', ch.x); ln.setAttribute('y2', ch.y);
+        const hi = p.hi && ch.hi;
+        ln.setAttribute('class', hi ? 'tree-edge-hi' : 'tree-edge');
+        ln.dataset.depth = d + 1;
+        treeSvg.appendChild(ln);
+      }
+    }
+    for (let d = 0; d <= TREE_DEPTH; d++) for (let i = 0; i < nodes[d].length; i++) {
+      const n = nodes[d][i];
+      const r = Math.max(4, 10 - d*1.2);
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', r);
+      let cls = 'tree-node';
+      if (d === TREE_DEPTH) cls = 'tree-leaf';
+      if (n.hi) cls = 'tree-node-hi';
+      c.setAttribute('class', cls); c.dataset.depth = d;
+      treeSvg.appendChild(c);
+    }
+    treeSvg.classList.add('tree-anim');
+    const levelDuration = 320;
+    [...treeSvg.children].forEach(el => {
+      const d = parseInt(el.dataset.depth, 10);
+      el.style.animationDelay = (d * levelDuration) + 'ms';
+    });
+    let d = 0; treeDepthEl.textContent = '0'; treeLeavesEl.textContent = '1';
+    const update = () => {
+      d++; if (d > TREE_DEPTH) return;
+      treeDepthEl.textContent = d;
+      treeLeavesEl.textContent = (1 << d).toString();
+      if (d < TREE_DEPTH) treeCounterTimer = setTimeout(update, levelDuration);
+    };
+    treeCounterTimer = setTimeout(update, levelDuration);
+  };
+  const replayBtn = document.getElementById('replay-tree');
+  if (replayBtn) replayBtn.addEventListener('click', buildTree);
+
+  /* ====== AES & SPONGENT ANIMATIONS (slides 5 + 7) ====== */
+  const AES_STATE = document.getElementById('aes-state');
+  const AES_PHASE = document.getElementById('aes-phase');
+  const AES_ROUND = document.getElementById('aes-round');
+  const SP_STATE = document.getElementById('sp-state');
+  const SP_PHASE = document.getElementById('sp-phase');
+  const SP_ROUND = document.getElementById('sp-round');
+  const AES_CELLS = [];
+  if (AES_STATE) for (let i = 0; i < 16; i++) {
+    const c = document.createElement('div'); c.className = 'cell';
+    AES_STATE.appendChild(c); AES_CELLS.push(c);
+  }
+  const SP_CELLS = [];
+  if (SP_STATE) for (let i = 0; i < 176; i++) {
+    const b = document.createElement('div'); b.className = 'bit';
+    SP_STATE.appendChild(b); SP_CELLS.push(b);
+  }
+  const seededState = (seed) => {
+    let h = seed * 2654435761 >>> 0; const out = [];
+    for (let i = 0; i < 16; i++) { h = (h * 0x85ebca6b + 0xc2b2ae35) >>> 0; out.push((h >>> 16) & 0xff); }
+    return out;
+  };
+  const AES_PHASES = ['SubBytes', 'ShiftRows', 'MixColumns', 'AddRoundKey'];
+  const SP_PHASES  = ['AddCounter', 'S-box layer', 'pLayer'];
+  let aesTimer = null, spTimer = null;
+  const stopRoundAnims = () => {
+    if (aesTimer) { clearTimeout(aesTimer); aesTimer = null; }
+    if (spTimer)  { clearTimeout(spTimer);  spTimer  = null; }
+  };
+  const aesPhaseStep = (round, phase) => {
+    AES_ROUND.textContent = String(round + 1).padStart(2, '0');
+    AES_PHASE.textContent = AES_PHASES[phase];
+    AES_CELLS.forEach(c => { c.classList.remove('hot', 'warm'); });
+    if (phase === 0) {
+      const newBytes = seededState(round * 4 + phase);
+      AES_CELLS.forEach((c, i) => {
+        c.textContent = newBytes[i].toString(16).padStart(2, '0').toUpperCase();
+        setTimeout(() => c.classList.add('hot'), (i % 4) * 40 + Math.floor(i / 4) * 20);
+        setTimeout(() => c.classList.remove('hot'), (i % 4) * 40 + 220);
+      });
+    } else if (phase === 1) {
+      for (let r = 0; r < 4; r++) {
+        const idxs = [0,1,2,3].map(c => r * 4 + c);
+        idxs.forEach(i => {
+          setTimeout(() => { AES_CELLS[i].classList.add('warm');
+            setTimeout(() => AES_CELLS[i].classList.remove('warm'), 220);
+          }, r * 80);
+        });
+      }
+    } else if (phase === 2) {
+      for (let col = 0; col < 4; col++) {
+        const idxs = [0,1,2,3].map(r => r * 4 + col);
+        idxs.forEach(i => {
+          setTimeout(() => { AES_CELLS[i].classList.add('hot');
+            setTimeout(() => AES_CELLS[i].classList.remove('hot'), 180);
+          }, col * 90);
+        });
+      }
+    } else {
+      AES_CELLS.forEach(c => c.classList.add('warm'));
+      setTimeout(() => AES_CELLS.forEach(c => c.classList.remove('warm')), 280);
+    }
+  };
+  const startAES = () => {
+    if (!AES_STATE) return;
+    let round = 0, phase = 0;
+    const init = seededState(99);
+    AES_CELLS.forEach((c, i) => { c.textContent = init[i].toString(16).padStart(2, '0').toUpperCase(); });
+    const tick = () => {
+      aesPhaseStep(round, phase);
+      phase++;
+      if (phase === 4) { phase = 0; round = (round + 1) % 10; }
+      aesTimer = setTimeout(tick, 500);
+    };
+    tick();
+  };
+  const spPhaseStep = (round, phase) => {
+    SP_ROUND.textContent = String(round + 1).padStart(2, '0');
+    SP_PHASE.textContent = SP_PHASES[phase];
+    SP_CELLS.forEach(b => b.classList.remove('hot', 'edge'));
+    if (phase === 0) {
+      for (let row = 0; row < 8; row++) {
+        const i_left = row * 22 + 0; const i_right = row * 22 + 21;
+        setTimeout(() => {
+          SP_CELLS[i_left].classList.add('edge');
+          SP_CELLS[i_right].classList.add('edge');
+          setTimeout(() => { SP_CELLS[i_left].classList.remove('edge'); SP_CELLS[i_right].classList.remove('edge'); }, 220);
+        }, row * 20);
+      }
+    } else if (phase === 1) {
+      for (let n = 0; n < 44; n++) for (let k = 0; k < 4; k++) {
+        const idx = n * 4 + k;
+        setTimeout(() => { SP_CELLS[idx].classList.add('hot');
+          setTimeout(() => SP_CELLS[idx].classList.remove('hot'), 100); }, n * 6);
+      }
+      setTimeout(() => SP_CELLS.forEach(b => b.classList.toggle('on', Math.random() < 0.5)), 280);
+    } else {
+      const N = 50;
+      for (let k = 0; k < N; k++) {
+        const i = Math.floor(Math.random() * 176);
+        setTimeout(() => { SP_CELLS[i].classList.add('hot');
+          setTimeout(() => SP_CELLS[i].classList.remove('hot'), 140); }, k * 8);
+      }
+    }
+  };
+  const startSpongent = () => {
+    if (!SP_STATE) return;
+    SP_CELLS.forEach(b => { b.classList.toggle('on', Math.random() < 0.5); b.classList.remove('hot', 'edge'); });
+    let round = 0, phase = 0;
+    const tick = () => {
+      spPhaseStep(round, phase);
+      phase++;
+      if (phase === 3) { phase = 0; round = (round + 1) % 80; }
+      spTimer = setTimeout(tick, 360);
+    };
+    tick();
+  };
+
+  /* ====== PARALLELISM CANVAS (slide 11) ====== */
+  const canvas = document.getElementById('par-canvas');
+  const slider = document.getElementById('par-slider');
+  const sliderVal = document.getElementById('par-slider-val');
+  const parDepth = document.getElementById('par-depth');
+  const parThreads = document.getElementById('par-threads');
+  const parScale = document.getElementById('par-scale');
+  const fmt = (n) => {
+    if (n >= 1e6) return (n/1e6).toFixed(n >= 10e6 ? 0 : 1).replace(/\.0$/,'') + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(n >= 10e3 ? 0 : 1).replace(/\.0$/,'') + 'K';
+    return n.toString();
+  };
+  const drawParallel = (depth) => {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (W === 0 || H === 0) return;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const threads = 1 << depth, maxDotCells = 1024;
+    if (threads <= maxDotCells) {
+      const cols = Math.max(1, Math.ceil(Math.sqrt(threads * (W / H))));
+      const rows = Math.ceil(threads / cols);
+      const cellW = W / cols, cellH = H / rows;
+      const dotSize = Math.max(2, Math.min(cellW, cellH) * 0.55);
+      ctx.fillStyle = '#c8ee3c';
+      for (let i = 0; i < threads; i++) {
+        const cx = (i % cols + 0.5) * cellW, cy = (Math.floor(i / cols) + 0.5) * cellH;
+        ctx.beginPath(); ctx.arc(cx, cy, dotSize/2, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      const cols = 32, rows = 32;
+      const cellW = W / cols, cellH = H / rows;
+      const dotSize = Math.max(2, Math.min(cellW, cellH) * 0.55);
+      ctx.fillStyle = '#c8ee3c';
+      for (let i = 0; i < 1024; i++) {
+        const cx = (i % cols + 0.5) * cellW, cy = (Math.floor(i / cols) + 0.5) * cellH;
+        ctx.beginPath(); ctx.arc(cx, cy, dotSize/2, 0, Math.PI * 2); ctx.fill();
+      }
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, 'rgba(200,238,60,0.10)');
+      grad.addColorStop(0.5, 'rgba(200,238,60,0.22)');
+      grad.addColorStop(1, 'rgba(200,238,60,0.10)');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(11,10,8,0.78)';
+      ctx.fillRect(W/2 - 120, H/2 - 26, 240, 52);
+      ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 1;
+      ctx.strokeRect(W/2 - 120, H/2 - 26, 240, 52);
+      ctx.fillStyle = '#f0e9d8'; ctx.font = '24px "Fraunces", serif'; ctx.textAlign = 'center';
+      ctx.fillText('× ' + fmt(threads/1024) + ' more', W/2, H/2 + 8);
+    }
+  };
+  const onParChange = (d) => {
+    const dn = Math.max(0, Math.min(20, parseInt(d, 10)));
+    sliderVal.textContent = dn; parDepth.textContent = dn;
+    const t = 1 << dn;
+    parThreads.textContent = t < 1000 ? t.toString() : fmt(t);
+    parScale.innerHTML = fmt(t) + '<span class="small">parallel threads</span>';
+    drawParallel(dn);
+  };
+  if (slider) slider.addEventListener('input', e => onParChange(e.target.value));
+
+  /* ====== BENCH CHART (slide 14) ====== */
+  const BENCH_DATA = [
+    { name: 'GPU T-tables',       sub: 'shared mem · 4 KB tables',  val: 50,   unit: 'M', color: 'var(--lime)' },
+    { name: 'GPU S-box',          sub: 'variable-key · constant',   val: 30,   unit: 'M', color: 'var(--lime)' },
+    { name: 'GPU fixed-key',      sub: 'precomputed round keys',    val: 30,   unit: 'M', color: 'var(--lime)' },
+    { name: 'CPU AES-NI',         sub: '1 thread · intrinsics',     val: 8,    unit: 'M', color: 'var(--ember)' },
+    { name: 'CPU OpenMP t=8',     sub: '8-core S-box reference',    val: 5,    unit: 'M', color: 'var(--ember)' },
+    { name: 'CPU 1T S-box',       sub: 'single-thread ANSI C',      val: 1.5,  unit: 'M', color: 'var(--ember)' },
+    { name: 'GPU Spongent',       sub: 'π[176] · 80 rounds',        val: 2,    unit: 'M', color: 'var(--ink-mute)' },
+    { name: 'CPU Spongent OMP-8', sub: 'OMP · 80 bit-rounds',       val: 0.075,unit: 'M', color: 'var(--ink-mute)' },
+  ];
+  const chartEl = document.getElementById('bench-chart');
+  const MAX_VAL = 55;
+  BENCH_DATA.forEach((d) => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="label">
+        <span class="name"><b>${d.name}</b></span>
+        <span class="sub">${d.sub}</span>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar" data-val="${d.val}" style="--bar-color:${d.color};"></div>
+      </div>
+      <div class="val" style="color:${d.color};">${d.val}<span style="font-family:var(--mono); font-size:.45em; color:var(--ink-mute); margin-left:4px; letter-spacing:.05em;">${d.unit}/s</span></div>
+    `;
+    chartEl.appendChild(row);
+  });
+  const axis = document.createElement('div');
+  axis.className = 'axis';
+  axis.innerHTML = `<span></span><div class="ticks">
+    <span>0</span><span>10M</span><span>20M</span><span>30M</span><span>40M</span><span>50M</span>
+  </div><span></span>`;
+  chartEl.appendChild(axis);
+  const animateBench = () => {
+    chartEl.querySelectorAll('.bar').forEach(b => b.style.width = '0%');
+    void chartEl.offsetWidth;
+    chartEl.querySelectorAll('.bar').forEach((b, i) => {
+      const v = parseFloat(b.dataset.val); const pct = (v / MAX_VAL) * 100;
+      setTimeout(() => { b.style.width = pct + '%'; }, 200 + i * 90);
+    });
+  };
+
+  /* ====== TRADE-OFF MINIBARS (slide 15) ====== */
+  const animateMinibars = () => {
+    const mbs = document.querySelectorAll('.slide-trade .minibar .bar');
+    mbs.forEach(b => b.style.width = '0%');
+    void document.querySelector('.slide-trade').offsetWidth;
+    mbs.forEach((b, i) => {
+      const pct = parseFloat(b.dataset.pct);
+      setTimeout(() => { b.style.width = pct + '%'; }, 200 + i * 60);
+    });
+  };
+
+  /* ====== KERNEL VARIANT MINI-VIZZES (slide 06) ====== */
+  // Build SVG content once, then animate on enter
+  const NS = "http://www.w3.org/2000/svg";
+  const buildKernelVizzes = () => {
+    // S-box: 32 × 8 grid of small cells representing 256-byte lookup
+    const sb = document.getElementById('kv-sbox');
+    if (sb && !sb.childElementCount) {
+      const W = 320, H = 60, cols = 32, rows = 8;
+      const cw = W / cols, rh = H / rows;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const el = document.createElementNS(NS, 'rect');
+        el.setAttribute('x', c * cw + 0.5);
+        el.setAttribute('y', r * rh + 0.5);
+        el.setAttribute('width', cw - 1);
+        el.setAttribute('height', rh - 1);
+        el.setAttribute('class', 'kv-cell');
+        el.dataset.r = r; el.dataset.c = c;
+        sb.appendChild(el);
+      }
+    }
+    // T-tables: 4 strips of 64 cells (decorative representation)
+    const tt = document.getElementById('kv-ttable');
+    if (tt && !tt.childElementCount) {
+      const W = 320, H = 60, cols = 64, rows = 4;
+      const cw = W / cols, rh = H / rows;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const el = document.createElementNS(NS, 'rect');
+        el.setAttribute('x', c * cw + 0.3);
+        el.setAttribute('y', r * rh + 1);
+        el.setAttribute('width', cw - 0.6);
+        el.setAttribute('height', rh - 2);
+        el.setAttribute('class', 'kv-strip-bg');
+        el.dataset.r = r; el.dataset.c = c;
+        tt.appendChild(el);
+      }
+    }
+    // Bitsliced: 32 vertical lanes
+    const bs = document.getElementById('kv-bitslice');
+    if (bs && !bs.childElementCount) {
+      const W = 320, H = 60, lanes = 32;
+      const lw = W / lanes;
+      for (let i = 0; i < lanes; i++) {
+        const el = document.createElementNS(NS, 'rect');
+        el.setAttribute('x', i * lw + 0.6);
+        el.setAttribute('y', 4);
+        el.setAttribute('width', lw - 1.2);
+        el.setAttribute('height', H - 8);
+        el.setAttribute('class', 'kv-lane');
+        el.dataset.i = i;
+        bs.appendChild(el);
+      }
+    }
+  };
+  let kvTimers = [];
+  const stopKVTimers = () => { kvTimers.forEach(t => clearTimeout(t)); kvTimers = []; };
+  const animateKernelVizzes = () => {
+    stopKVTimers();
+    // S-box: random cell highlights walking through state
+    const sb = document.getElementById('kv-sbox');
+    if (sb) {
+      const cells = sb.querySelectorAll('.kv-cell');
+      cells.forEach(c => c.classList.remove('hot'));
+      // sequential sweep
+      cells.forEach((c, i) => {
+        kvTimers.push(setTimeout(() => {
+          c.classList.add('hot');
+          kvTimers.push(setTimeout(() => c.classList.remove('hot'), 280));
+        }, i * 4));
+      });
+    }
+    // T-tables: highlight one column per strip in sequence
+    const tt = document.getElementById('kv-ttable');
+    if (tt) {
+      const cells = tt.querySelectorAll('.kv-strip-bg');
+      cells.forEach(c => c.setAttribute('class', 'kv-strip-bg'));
+      // sweep one column at a time across the strips
+      const cols = 64;
+      for (let c = 0; c < cols; c++) {
+        kvTimers.push(setTimeout(() => {
+          for (let r = 0; r < 4; r++) {
+            const cell = tt.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+            if (cell) {
+              cell.setAttribute('class', 'kv-strip-hot');
+              kvTimers.push(setTimeout(() => cell.setAttribute('class', 'kv-strip-bg'), 280));
+            }
+          }
+        }, c * 22));
+      }
+    }
+    // Bitsliced: all 32 lanes pulse together (synchronized), then a few lanes pulse independently
+    const bs = document.getElementById('kv-bitslice');
+    if (bs) {
+      const lanes = bs.querySelectorAll('.kv-lane');
+      lanes.forEach(l => l.classList.remove('hot'));
+      kvTimers.push(setTimeout(() => {
+        lanes.forEach(l => l.classList.add('hot'));
+        kvTimers.push(setTimeout(() => lanes.forEach(l => l.classList.remove('hot')), 380));
+      }, 150));
+      kvTimers.push(setTimeout(() => {
+        lanes.forEach(l => l.classList.add('hot'));
+        kvTimers.push(setTimeout(() => lanes.forEach(l => l.classList.remove('hot')), 380));
+      }, 900));
+    }
+  };
+
+  /* ====== CPU THREAD DOTS (slide 10) ====== */
+  let cpuDotsInit = false;
+  const buildCpuThreads = () => {
+    if (cpuDotsInit) return;
+    cpuDotsInit = true;
+    document.querySelectorAll('.slide-cpu .thr').forEach(el => {
+      const n = parseInt(el.dataset.threads, 10);
+      const style = el.dataset.style;
+      // dots
+      for (let i = 0; i < n; i++) {
+        const d = document.createElement('div'); d.className = 'dot';
+        el.appendChild(d);
+      }
+      if (style === 'aesni') {
+        const b = document.createElement('div'); b.className = 'badge';
+        b.textContent = '⚡ AES-NI';
+        el.appendChild(b);
+      }
+    });
+  };
+  let cpuTimers = [];
+  const stopCpuTimers = () => { cpuTimers.forEach(t => clearTimeout(t)); cpuTimers = []; };
+  const animateCpuThreads = () => {
+    stopCpuTimers();
+    document.querySelectorAll('.slide-cpu .thr').forEach(el => {
+      const dots = el.querySelectorAll('.dot');
+      const style = el.dataset.style;
+      dots.forEach(d => d.classList.remove('lit'));
+      if (style === 'single' || style === 'aesni') {
+        // one dot pulsing on/off
+        const d = dots[0];
+        let on = false;
+        const tick = () => {
+          on = !on;
+          d.classList.toggle('lit', on);
+          cpuTimers.push(setTimeout(tick, 520));
+        };
+        tick();
+      } else if (style === 'omp') {
+        // wave: light each dot in sequence, repeating
+        let phase = 0;
+        const tick = () => {
+          dots.forEach((d, i) => {
+            const lit = ((i + phase) % dots.length) < 4; // 4 lit at a time
+            d.classList.toggle('lit', lit);
+          });
+          phase = (phase + 1) % dots.length;
+          cpuTimers.push(setTimeout(tick, 280));
+        };
+        tick();
+      }
+    });
+  };
+
+  /* ====== MEMORY TIER BARS (slide 12) ====== */
+  const animateMemBars = () => {
+    const layers = document.querySelectorAll('.slide-mem .layer');
+    // reset first
+    layers.forEach(l => {
+      const f = l.querySelector('.mem-bar .fill');
+      if (f) f.style.width = '0%';
+    });
+    void document.querySelector('.slide-mem').offsetWidth;
+    layers.forEach((l, i) => {
+      const f = l.querySelector('.mem-bar .fill');
+      const pct = parseFloat(l.dataset.mempct || '0');
+      if (f) setTimeout(() => { f.style.width = pct + '%'; }, 200 + i * 140);
+    });
+  };
+
+  /* ====== VERIFICATION TEST RUNNER (slide 13) ====== */
+  let verTimers = [];
+  const stopVerTimers = () => { verTimers.forEach(t => clearTimeout(t)); verTimers = []; };
+  const animateVerification = () => {
+    stopVerTimers();
+    const slide = document.querySelector('.slide-ver');
+    if (!slide) return;
+    const tests = slide.querySelectorAll('.test');
+    const fill = document.getElementById('ver-fill');
+    const pct = document.getElementById('ver-pct');
+    // reset
+    slide.classList.remove('run');
+    tests.forEach(t => {
+      const c = t.querySelector('.check');
+      if (c) c.classList.remove('pass');
+    });
+    if (fill) fill.style.width = '0%';
+    if (pct) pct.textContent = '0/35';
+    void slide.offsetWidth;
+    slide.classList.add('run');
+
+    // total tests count (35)
+    let cumulative = 0;
+    const total = 35;
+    tests.forEach((t, i) => {
+      const n = parseInt(t.dataset.count || '0', 10);
+      verTimers.push(setTimeout(() => {
+        const c = t.querySelector('.check');
+        if (c) c.classList.add('pass');
+        cumulative += n;
+        if (pct) pct.textContent = cumulative + '/' + total;
+        if (fill) fill.style.width = ((cumulative / total) * 100) + '%';
+      }, 250 + i * 180));
+    });
+  };
+
+  /* ====== ENTER ROUTING ====== */
+  const onSlideEnter = (i) => {
+    const slide = slides[i]; if (!slide) return;
+    replayEntranceAnim(slide);
+    stopRoundAnims();
+    stopKVTimers();
+    stopCpuTimers();
+    stopVerTimers();
+    // slide index → 0-based
+    if (i === 2)  buildTree();              // 03 tree
+    if (i === 4)  startAES();               // 05 AES
+    if (i === 5)  animateKernelVizzes();    // 06 kernel variants
+    if (i === 6)  startSpongent();          // 07 Spongent
+    if (i === 9)  animateCpuThreads();      // 10 CPU baselines
+    if (i === 10) requestAnimationFrame(() => onParChange(slider.value)); // 11 parallelism
+    if (i === 11) animateMemBars();         // 12 memory hierarchy
+    if (i === 12) animateVerification();    // 13 verification
+    if (i === 13) animateBench();           // 14 bench
+    if (i === 14) animateMinibars();        // 15 trade-offs
+  };
+
+  /* ====== INIT ====== */
+  onScroll();
+  buildKernelVizzes();
+  buildCpuThreads();
+  requestAnimationFrame(() => {
+    if (activeIdx === -1) setActive(0);
+    if (slider) onParChange(0);
+    buildTree();
+  });
+  window.addEventListener('resize', () => {
+    if (activeIdx === 10 && slider) onParChange(slider.value);
+  });
+})();
 </script>
 </body>
 </html>
