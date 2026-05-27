@@ -23,16 +23,32 @@ def _gpu_present() -> bool:
         return False
 
 
+_SPONGENT_VARIANTS = ["spongent-128", "spongent-160", "spongent-224", "spongent-256"]
+
+
 def _cells_cpu(depths: list[int], omp_threads: list[int]) -> Iterable[dict]:
     for d in depths:
         yield dict(backend="cpu_1t", prg="aes", kernel="sbox", depth=d)
         yield dict(backend="cpu_aesni", prg="aes", kernel="sbox", depth=d)
-        yield dict(backend="cpu_1t", prg="spongent", kernel="sbox", depth=d)
+        for sv in _SPONGENT_VARIANTS:
+            yield dict(
+                backend="cpu_1t",
+                prg="spongent",
+                kernel="sbox",
+                depth=d,
+                spongent_variant=sv,
+            )
         for t in omp_threads:
             yield dict(backend="cpu_omp", prg="aes", kernel="sbox", depth=d, threads=t)
-            yield dict(
-                backend="cpu_omp", prg="spongent", kernel="sbox", depth=d, threads=t
-            )
+            for sv in _SPONGENT_VARIANTS:
+                yield dict(
+                    backend="cpu_omp",
+                    prg="spongent",
+                    kernel="sbox",
+                    depth=d,
+                    threads=t,
+                    spongent_variant=sv,
+                )
 
 
 def _cells_gpu(depths: list[int]) -> Iterable[dict]:
@@ -40,7 +56,14 @@ def _cells_gpu(depths: list[int]) -> Iterable[dict]:
         for kernel in ("sbox", "ttable", "bitslice"):
             yield dict(backend="gpu", prg="aes", kernel=kernel, depth=d)
         yield dict(backend="gpu", prg="aes", kernel="sbox", key_mode="fixed", depth=d)
-        yield dict(backend="gpu", prg="spongent", kernel="sbox", depth=d)
+        for sv in _SPONGENT_VARIANTS:
+            yield dict(
+                backend="gpu",
+                prg="spongent",
+                kernel="sbox",
+                depth=d,
+                spongent_variant=sv,
+            )
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -127,7 +127,15 @@ class GGMTree:
             if self.key_mode == "fixed" and kernel == "sbox":
                 return host.gpu_expand_aes_sbox_fixedkey(self.seed, self.depth)
         elif self.prg == "spongent":
-            return host.gpu_expand_spongent(self.seed, self.depth)
+            v = get_variant(self.spongent_variant)
+            return host.gpu_expand_spongent(
+                self.seed,
+                self.depth,
+                width=v.width,
+                rounds=v.rounds,
+                lfsr_bits=v.lfsr_bits,
+                lfsr_init=v.lfsr_init,
+            )
         raise ValueError(
             f"unsupported GPU combo prg={self.prg!r} kernel={kernel!r} key_mode={self.key_mode!r}"
         )

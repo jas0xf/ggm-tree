@@ -19,9 +19,12 @@ _NVCC_OPTIONS = ["-O3", "-arch=sm_86", "--use_fast_math"]
 
 
 @functools.lru_cache(maxsize=None)
-def _load_module(src_filename: str) -> SourceModule:
+def _load_module(
+    src_filename: str, extra_defines: tuple[tuple[str, str], ...] = ()
+) -> SourceModule:
     src = (_KERNEL_DIR / src_filename).read_text()
-    return SourceModule(src, options=_NVCC_OPTIONS, no_extern_c=True)
+    opts = list(_NVCC_OPTIONS) + [f"-D{k}={v}" for k, v in extra_defines]
+    return SourceModule(src, options=opts, no_extern_c=True)
 
 
 # ---- AES constants (S-box + Rcon + T-tables) ----------------------------------------
@@ -420,17 +423,43 @@ _SP_SBOX = bytes(
 )
 
 
-def _compute_sp_player() -> bytes:
-    out = bytearray(176)
-    for j in range(176):
-        out[j] = j if j == 175 else (j * 44) % 175
+def _compute_sp_player(width: int = 176) -> bytes:
+    pmult = width // 4
+    pmod = width - 1
+    out = bytearray(width)
+    for j in range(width):
+        out[j] = j if j == pmod else (j * pmult) % pmod
     return bytes(out)
 
 
-def gpu_expand_spongent(seed: bytes, depth: int) -> np.ndarray:
-    mod = _load_module("spongent_kernel.cu")
+def _sp_defines(
+    width: int, rounds: int, lfsr_bits: int, lfsr_init: int
+) -> tuple[tuple[str, str], ...]:
+    return (
+        ("SP_WIDTH", str(width)),
+        ("SP_BYTES", str(width // 8)),
+        ("SP_ROUNDS", str(rounds)),
+        ("SP_PMULT", str(width // 4)),
+        ("SP_PMOD", str(width - 1)),
+        ("SP_LFSR_BITS", str(lfsr_bits)),
+        ("SP_LFSR_INIT", hex(lfsr_init)),
+        ("SP_HI_BYTE", str((width - lfsr_bits) // 8)),
+        ("SP_HI_SHIFT", str((width - lfsr_bits) % 8)),
+    )
+
+
+def gpu_expand_spongent(
+    seed: bytes,
+    depth: int,
+    width: int = 176,
+    rounds: int = 80,
+    lfsr_bits: int = 7,
+    lfsr_init: int = 0x05,
+) -> np.ndarray:
+    defines = _sp_defines(width, rounds, lfsr_bits, lfsr_init)
+    mod = _load_module("spongent_kernel.cu", extra_defines=defines)
     _copy_constant(mod, "SP_SBOX", _SP_SBOX)
-    _copy_constant(mod, "SP_PLAYER", _compute_sp_player())
+    _copy_constant(mod, "SP_PLAYER", _compute_sp_player(width))
     fn = mod.get_function("ggm_spongent_expand_level")
     tree_gpu, total = _alloc_and_seed_tree(seed, depth)
     _per_level_launch(fn, tree_gpu, depth)

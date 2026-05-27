@@ -24,6 +24,7 @@ class BenchResult:
     threads: int
     depth: int
     mode: str
+    spongent_variant: str
     median_seconds: float
     iqr_seconds: float
     min_seconds: float
@@ -74,6 +75,7 @@ def run_cell(
     key_mode: str = "variable",
     mode: str = "full",
     threads: int = 0,
+    spongent_variant: str = "spongent-160",
     seed: Optional[bytes] = None,
     warmup: int = 5,
     repeats: int = 30,
@@ -81,7 +83,13 @@ def run_cell(
     seed = seed if seed is not None else bytes(range(16))
 
     def expand_once() -> None:
-        t = GGMTree(prg=prg, depth=depth, seed=seed, key_mode=key_mode)
+        t = GGMTree(
+            prg=prg,
+            depth=depth,
+            seed=seed,
+            key_mode=key_mode,
+            spongent_variant=spongent_variant,
+        )
         t.expand(backend=backend, kernel=kernel, mode=mode, threads=threads)
 
     for _ in range(warmup):
@@ -106,6 +114,7 @@ def run_cell(
         threads=threads,
         depth=depth,
         mode=mode,
+        spongent_variant=spongent_variant,
         median_seconds=med,
         iqr_seconds=q75 - q25,
         min_seconds=min(times),
@@ -122,8 +131,9 @@ def run_cell(
 
 def save(res: BenchResult, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
+    sv = f"-{res.spongent_variant}" if res.prg == "spongent" else ""
     fname = (
-        f"{res.backend}-{res.prg}-{res.kernel}-{res.key_mode}"
+        f"{res.backend}-{res.prg}{sv}-{res.kernel}-{res.key_mode}"
         f"-t{res.threads}-m{res.mode}-d{res.depth:02d}.json"
     )
     path = out_dir / fname
