@@ -1,0 +1,21 @@
+{
+  "backend": "gpu",
+  "prg": "spongent",
+  "kernel": "sbox",
+  "key_mode": "variable",
+  "threads": 0,
+  "depth": 12,
+  "mode": "full",
+  "spongent_variant": "spongent-128",
+  "median_seconds": 0.0079975770204328,
+  "iqr_seconds": 1.3242417480796576e-05,
+  "min_seconds": 0.007979939982760698,
+  "leaves_per_sec": 512155.1176731699,
+  "bytes_per_sec": 8194481.882770718,
+  "repeats": 15,
+  "warmup": 3,
+  "seed_hex": "000102030405060708090a0b0c0d0e0f",
+  "git_sha": "unknown",
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2696 v3 @ 2.30GHz",
+  "gpu_model": "NVIDIA GeForce RTX 3060"
+}
