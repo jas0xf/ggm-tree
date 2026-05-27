@@ -424,12 +424,14 @@ _SP_SBOX = bytes(
 
 
 def _compute_sp_player(width: int = 176) -> bytes:
+    import struct
+
     pmult = width // 4
     pmod = width - 1
-    out = bytearray(width)
+    values = []
     for j in range(width):
-        out[j] = j if j == pmod else (j * pmult) % pmod
-    return bytes(out)
+        values.append(j if j == pmod else (j * pmult) % pmod)
+    return struct.pack(f"<{width}H", *values)
 
 
 def _sp_defines(

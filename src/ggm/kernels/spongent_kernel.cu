@@ -30,7 +30,7 @@
 extern "C" {
 
 __constant__ uint8_t SP_SBOX[16];
-__constant__ uint8_t SP_PLAYER[SP_WIDTH];
+__constant__ uint16_t SP_PLAYER[SP_WIDTH];
 
 }
 
