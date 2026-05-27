@@ -15,7 +15,9 @@ void ggm_aes128_encrypt_block_ni (const uint8_t key[16],
                                   const uint8_t in[16],
                                   uint8_t out[16]);
 
-/* Spongent-π[176] single-block permutation. */
+/* Spongent single-block permutation — generic (any variant) + π[176] wrapper. */
+void ggm_spongent_block_generic(int width_bits, int rounds, int lfsr_bits, uint8_t lfsr_init,
+                                const uint8_t *in, uint8_t *out);
 void ggm_spongent_pi176_block_ref(const uint8_t in[22], uint8_t out[22]);
 
 /* GGM tree expansion. `out` must be sized to (2^(depth+1) - 1) * 16 bytes. */
@@ -23,6 +25,11 @@ void ggm_expand_aes_sbox_1t  (const uint8_t seed[16], uint32_t depth, uint8_t *o
 void ggm_expand_aes_ni_1t    (const uint8_t seed[16], uint32_t depth, uint8_t *out);
 void ggm_expand_aes_sbox_omp (const uint8_t seed[16], uint32_t depth, uint8_t *out, int threads);
 
+/* Spongent tree expansion — generic (any variant) + π[176] wrappers. */
+void ggm_expand_spongent_generic_1t (int width_bits, int rounds, int lfsr_bits, uint8_t lfsr_init,
+                                     const uint8_t seed[16], uint32_t depth, uint8_t *out);
+void ggm_expand_spongent_generic_omp(int width_bits, int rounds, int lfsr_bits, uint8_t lfsr_init,
+                                     const uint8_t seed[16], uint32_t depth, uint8_t *out, int threads);
 void ggm_expand_spongent_1t  (const uint8_t seed[16], uint32_t depth, uint8_t *out);
 void ggm_expand_spongent_omp (const uint8_t seed[16], uint32_t depth, uint8_t *out, int threads);
 

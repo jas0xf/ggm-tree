@@ -11,6 +11,7 @@ from typing import Optional
 import numpy as np
 
 from . import ctypes_iface
+from .variants import SPONGENT_VARIANTS, DEFAULT_SPONGENT, get_variant
 
 _CPU_BACKENDS = {"cpu_1t", "cpu_aesni", "cpu_omp"}
 _GPU_BACKENDS = {"gpu"}
@@ -28,6 +29,7 @@ class GGMTree:
     depth: int
     seed: bytes
     key_mode: str = "variable"
+    spongent_variant: str = DEFAULT_SPONGENT
 
     _tree: Optional[np.ndarray] = field(default=None, init=False, repr=False)
 
@@ -41,6 +43,11 @@ class GGMTree:
         if self.key_mode not in _KEY_MODES:
             raise ValueError(
                 f"key_mode must be one of {_KEY_MODES}; got {self.key_mode!r}"
+            )
+        if self.prg == "spongent" and self.spongent_variant not in SPONGENT_VARIANTS:
+            raise ValueError(
+                f"spongent_variant must be one of {list(SPONGENT_VARIANTS)}; "
+                f"got {self.spongent_variant!r}"
             )
         self.seed = bytes(self.seed)
 
@@ -76,10 +83,26 @@ class GGMTree:
             if backend == "cpu_omp":
                 return ctypes_iface.expand_aes_sbox_omp(self.seed, self.depth, threads)
         elif self.prg == "spongent":
+            v = get_variant(self.spongent_variant)
             if backend == "cpu_1t":
-                return ctypes_iface.expand_spongent_1t(self.seed, self.depth)
+                return ctypes_iface.expand_spongent_generic_1t(
+                    v.width,
+                    v.rounds,
+                    v.lfsr_bits,
+                    v.lfsr_init,
+                    self.seed,
+                    self.depth,
+                )
             if backend == "cpu_omp":
-                return ctypes_iface.expand_spongent_omp(self.seed, self.depth, threads)
+                return ctypes_iface.expand_spongent_generic_omp(
+                    v.width,
+                    v.rounds,
+                    v.lfsr_bits,
+                    v.lfsr_init,
+                    self.seed,
+                    self.depth,
+                    threads,
+                )
             if backend == "cpu_aesni":
                 raise ValueError("AES-NI does not apply to Spongent")
         raise ValueError(
